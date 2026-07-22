@@ -1,0 +1,60 @@
+# Cross-language conformance CI.
+#
+# Two tiers, mirroring run-conformance.sh:
+#   quick — the C reference's 130-unit selftest + frozen-golden scenario check
+#           (fast signal on every push)
+#   full  — the whole 7-language suite: seed soak, forkvectors, invariant
+#           batteries, attrib-curve and ECMH frozen goldens across
+#           c · py · ts · java · rust · go · cs
+name: conformance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  quick:
+    name: c reference selftest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: build c reference
+        run: make -C impls/c
+      - name: selftest
+        run: impls/c/sm selftest
+      - name: frozen scenario golden
+        run: |
+          got=$(impls/c/sm scenario | awk '/^combined/{print $2}')
+          want=$(awk -F= '/^GOLDEN_COMBINED=/{print $2}' run-conformance.sh)
+          echo "combined=$got want=$want"
+          [ "$got" = "$want" ]
+
+  full:
+    name: 7-language conformance suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      # node ≥ 23.6 runs impls/ts/sm.ts directly (type stripping);
+      # java ≥ 22 source-launches the multi-file impls/java (JEP 458)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 24
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - name: rust toolchain
+        run: rustup update --no-self-update stable && rustup default stable
+      - name: run conformance suite
+        run: ./run-conformance.sh
