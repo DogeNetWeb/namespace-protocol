@@ -233,6 +233,41 @@ static void test_renew(void) {
     sm_free(s);
 }
 
+// §6 ceiling reach: a selective RENEW whose flag bit sits PAST the old
+// 80-byte carrier (bit 590 needs 74 flag bytes) folds correctly — the bitmap
+// ops scale to Pepecoin's script ceiling, not to the relay default.
+static void test_wide_bitmap(void) {
+    SmState *s = sm_new(0);
+    uint8_t H[20]; mk_h160(H, 0xAA);
+    char nm[8];
+    sm_begin_block(s, 10, 1400, RATE_DAYS);
+    for (int i = 0; i < 600; i++) {
+        snprintf(nm, sizeof nm, "n%03d", i);
+        SmTx c = {0}; tx1(&c, 0xAA, 0); add_action(&c, mk_commit(nm, H, 0x33), 0);
+        sm_apply_tx(s, &c); sm_tx_free(&c);
+    }
+    sm_begin_block(s, 11, 1500, RATE_DAYS);
+    for (int i = 0; i < 600; i++) {
+        snprintf(nm, sizeof nm, "n%03d", i);
+        SmTx k = {0}; tx1(&k, 0xAA, 0); add_action(&k, mk_claim(nm, 0x33), 10);
+        sm_apply_tx(s, &k); sm_tx_free(&k);
+    }
+    CHECK(sm_lookup(s, "n590") != NULL, "600-name owned set minted");
+    int64_t exp0 = sm_lookup(s, "n590")->lease_expiry;
+    int64_t nb0  = sm_lookup(s, "n589")->lease_expiry;
+    sm_begin_block(s, 12, 1600, RATE_DAYS);
+    SmAction a; memset(&a, 0, sizeof a); a.op = SM_OP_RENEW;
+    a.has_anchor = 1; a.anchor = 12;
+    a.flags_len = 74;                        // impossible under the old 71-byte cap
+    a.flags[73] = 0x40;                      // LSB-first bit 590 = byte 73, bit 6
+    SmTx t = {0}; tx1(&t, 0xAA, 0); add_action(&t, a, 5);
+    sm_apply_tx(s, &t); sm_tx_free(&t);
+    CHECK(sm_lookup(s, "n590")->lease_expiry == exp0 + 5*86400,
+          "wide-bitmap RENEW (bit 590, 74 flag bytes) water-fills the flagged name");
+    CHECK(sm_lookup(s, "n589")->lease_expiry == nb0, "neighbor at bit 589 untouched");
+    sm_free(s);
+}
+
 static void test_transfer_release(void) {
     SmState *s = minted(0xAA, "bob", 10, 1500);
     int64_t exp0 = sm_lookup(s, "bob")->lease_expiry;
@@ -472,11 +507,11 @@ static void test_tx_bounds(void) {
 // enc(a) → decode → enc again must reproduce the bytes (the codec is a bijection
 // on well-formed actions); the demux/drop cases pin the fail-closed parse.
 static int codec_rt(const SmAction *a) {
-    uint8_t b1[80]; size_t l1 = sm_encode_action(a, b1);
+    static uint8_t b1[SM_CARRIER_MAX]; size_t l1 = sm_encode_action(a, b1);
     if (l1 == 0) return 0;
-    SmCarrier c; sm_decode_payload(b1, l1, 0, &c);
+    static SmCarrier c; sm_decode_payload(b1, l1, 0, &c);
     if (c.kind != SM_CAR_ACTION) return 0;
-    uint8_t b2[80]; size_t l2 = sm_encode_action(&c.act, b2);
+    static uint8_t b2[SM_CARRIER_MAX]; size_t l2 = sm_encode_action(&c.act, b2);
     return l2 == l1 && memcmp(b1, b2, l1) == 0;
 }
 static void test_codec(void) {
@@ -501,6 +536,32 @@ static void test_codec(void) {
     a = as_to(3);                      CHECK(codec_rt(&a), "codec round-trip AS");
     a = trade(0, 1, "aaa", "bbb");     CHECK(codec_rt(&a), "codec round-trip TRADE");
 
+    // §6 pinned carrier ceiling: flags at the exact consensus caps
+    // round-trip; one byte past fails BOTH directions (fail-closed codec).
+    { SmAction r; memset(&r, 0, sizeof r); r.op = SM_OP_RENEW; r.has_anchor = 1; r.anchor = 7;
+      r.flags_len = SM_FLAGS_MAX;
+      for (int i = 0; i < SM_FLAGS_MAX; i++) r.flags[i] = (uint8_t)(i * 7 + 1);
+      CHECK(codec_rt(&r), "codec round-trip RENEW-selective at SM_FLAGS_MAX (9987 flag bytes)");
+      static uint8_t w[SM_CARRIER_MAX + 8]; size_t l = sm_encode_action(&r, w);
+      CHECK(l == (size_t)SM_CARRIER_MAX, "RENEW at cap encodes to exactly SM_CARRIER_MAX (9996) bytes");
+      SmCarrier cw; sm_decode_payload(w, l, 0, &cw);
+      CHECK(cw.kind == SM_CAR_ACTION && cw.act.flags_len == SM_FLAGS_MAX,
+            "...and decodes with every flag byte intact");
+      w[l] = 0x00; sm_decode_payload(w, l + 1, 0, &cw);
+      CHECK(cw.kind == SM_CAR_IGNORE, "one byte past the L1 carrier ceiling -> ignore"); }
+    { SmAction t; memset(&t, 0, sizeof t); t.op = SM_OP_TRANSFER; mk_h160(t.addr, 0xBB);
+      t.has_anchor = 1; t.anchor = 7;
+      t.flags_len = SM_FLAGS_XFER_MAX;
+      for (int i = 0; i < SM_FLAGS_XFER_MAX; i++) t.flags[i] = (uint8_t)(i + 1);
+      CHECK(codec_rt(&t), "codec round-trip TRANSFER-selective at SM_FLAGS_XFER_MAX (9967)");
+      static uint8_t w2[SM_CARRIER_MAX + 8];
+      t.flags_len = SM_FLAGS_XFER_MAX + 1;
+      CHECK(sm_encode_action(&t, w2) == 0, "TRANSFER flags past the cap refuse to encode"); }
+    { SmAction r; memset(&r, 0, sizeof r); r.op = SM_OP_RELEASE; r.has_anchor = 1; r.anchor = 3;
+      r.flags_len = SM_FLAGS_MAX;
+      for (int i = 0; i < SM_FLAGS_MAX; i++) r.flags[i] = 0xFF;
+      CHECK(codec_rt(&r), "codec round-trip RELEASE at SM_FLAGS_MAX"); }
+
     // demux: non-prefix / overlay / bare UTF-8 → IGNORE; only name actions → ACTION.
     SmCarrier c;
     const uint8_t hello[5] = { 'h','e','l','l','o' };
@@ -511,17 +572,17 @@ static void test_codec(void) {
       sm_decode_payload(ov, 5, 0, &c);  CHECK(c.kind == SM_CAR_IGNORE, "demux overlay opcode → ignore"); }
 
     // fail-closed action parse: truncated / wrong-length / bad-name / bad-opcode → IGNORE.
-    { uint8_t b[80]; a = mk_claim("bob", 0x11); size_t l = sm_encode_action(&a, b);
+    { static uint8_t b[SM_CARRIER_MAX]; a = mk_claim("bob", 0x11); size_t l = sm_encode_action(&a, b);
       sm_decode_payload(b, 36, 0, &c);    CHECK(c.kind == SM_CAR_IGNORE, "parse CLAIM with no name (salt only) → ignore");
       sm_decode_payload(b, l, 0, &c);     CHECK(c.kind == SM_CAR_ACTION && c.act.op == SM_OP_CLAIM, "parse exact CLAIM → action"); }
-    { uint8_t b[80]; a = mk_commit("bob", A, 0x11); size_t l = sm_encode_action(&a, b);
+    { static uint8_t b[SM_CARRIER_MAX]; a = mk_commit("bob", A, 0x11); size_t l = sm_encode_action(&a, b);
       sm_decode_payload(b, l - 1, 0, &c); CHECK(c.kind == SM_CAR_IGNORE, "parse short COMMIT → ignore"); }
     { uint8_t b[5] = { 0xFF, 0x50, 0x4E, SM_OP_RESERVE, ',' };       // comma is not a name char
       sm_decode_payload(b, 5, 0, &c);     CHECK(c.kind == SM_CAR_IGNORE, "parse RESERVE bad-name → ignore"); }
     { uint8_t b[4] = { 0xFF, 0x50, 0x4E, 0x00 };
       sm_decode_payload(b, 4, 1, &c);     CHECK(c.kind == SM_CAR_IGNORE, "parse opcode 0x00 → ignore"); }
     { uint8_t b[4] = { 0xFF, 0x50, 0x4E, 0x10 };
-      sm_decode_payload(b, 4, 1, &c);     CHECK(c.kind == SM_CAR_IGNORE, "parse opcode 0x10 (>0x0C) → ignore"); }
+      sm_decode_payload(b, 4, 1, &c);     CHECK(c.kind == SM_CAR_IGNORE, "parse opcode 0x10 (>0x0F) → ignore"); }
     { uint8_t b[9] = { 0xFF, 0x50, 0x4E, SM_OP_TRADE, 0, 1, 'a', 'b', 'c' };   // no comma
       sm_decode_payload(b, 9, 0, &c);     CHECK(c.kind == SM_CAR_IGNORE, "parse TRADE no-comma → ignore"); }
     { uint8_t b[10] = { 0xFF, 0x50, 0x4E, SM_OP_TRADE, 0, 1, 'a', ',', 'b', ',' }; // two commas → wait that's a,(b,)
@@ -857,6 +918,7 @@ static int selftest(void) {
     test_claim_priority();
     test_lease_lapse();
     test_renew();
+    test_wide_bitmap();
     test_transfer_release();
     test_market_open();
     test_market_reserve_guards();
@@ -1418,6 +1480,33 @@ static int cmd_scenario(void) {
       SmTx tk = {0}; tx1(&tk, 0xAA, 0); add_action(&tk, mk_claim("foo", 0x95), 0xFFFFFFFFFFFFFFFFULL); sm_apply_tx(s, &tk);
       emit_state(&comb, "58_lease_clamp_huge_burn", s); sm_free(s); }
 
+    // 59: RENEW_NAME (§3.5) — the by-name renew extends exactly the named lease
+    // (no anchor, no bump); the same op from a non-owner drops (state unchanged).
+    { SmState *s = minted(0xAA, "bar", 10, 1500);
+      sm_begin_block(s, 12, 1600, RATE_DAYS);
+      SmAction a; memset(&a, 0, sizeof a); a.op = SM_OP_RENEW_NAME;
+      memcpy(a.name, "bar", 4); a.name_len = 3;
+      SmTx t = {0}; tx1(&t, 0xAA, 0); add_action(&t, a, 7); sm_apply_tx(s, &t);    // +7 days
+      SmTx t2 = {0}; tx1(&t2, 0xBB, 1); add_action(&t2, a, 7); sm_apply_tx(s, &t2); // not B's → drop
+      emit_state(&comb, "59_renew_name", s); sm_free(s); }
+
+    // 60: TRANSFER_NAME (§3.5/§3.6) — gifts exactly the named name to the target,
+    // lease conveys, and the move bumps BOTH parties' last_set_mutation_height.
+    { SmState *s = minted(0xAA, "bar", 10, 1500);
+      sm_begin_block(s, 12, 1600, RATE_DAYS);
+      SmAction a; memset(&a, 0, sizeof a); a.op = SM_OP_TRANSFER_NAME;
+      memcpy(a.addr, B, 20); memcpy(a.name, "bar", 4); a.name_len = 3;
+      SmTx t = {0}; tx1(&t, 0xAA, 0); add_action(&t, a, 0); sm_apply_tx(s, &t);
+      emit_state(&comb, "60_transfer_name", s); sm_free(s); }
+
+    // 61: RELEASE_NAME (§3.5/§3.6) — returns exactly the named name to the pool
+    // (bump), and it is immediately reclaimable by a later CLAIM in the same block.
+    { SmState *s = minted(0xAA, "bar", 10, 1500);
+      sm_begin_block(s, 12, 1600, RATE_DAYS);
+      SmAction a; memset(&a, 0, sizeof a); a.op = SM_OP_RELEASE_NAME;
+      memcpy(a.name, "bar", 4); a.name_len = 3;
+      SmTx t = {0}; tx1(&t, 0xAA, 0); add_action(&t, a, 0); sm_apply_tx(s, &t);
+      emit_state(&comb, "61_release_name", s); sm_free(s); }
 
     uint8_t cd[32]; sha256_final(&comb, cd); char hx[65]; hexout(cd, 32, hx);
     printf("combined %s\n", hx);

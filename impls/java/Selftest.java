@@ -38,6 +38,29 @@ final class Selftest {
         return new Model.Tx(new Model.TxIn[]{ new Model.TxIn(id, Const.P2PKH, true) },
                             new Model.TxOut[]{ Model.TxOut.carrier(java.math.BigInteger.valueOf(value), Wire.encode(a)) });
     }
+    // §6 pinned carrier ceiling: flags at the exact consensus caps decode;
+    // one byte past the ceiling is IGNORE (fail-closed).
+    private static void testL1CarrierCeiling() {
+        byte[] wide = new byte[4 + 5 + Const.FLAGS_MAX];
+        wide[0] = Const.P0; wide[1] = Const.P1; wide[2] = Const.P2; wide[3] = (byte) Const.RENEW;
+        for (int i = 9; i < wide.length; i++) wide[i] = (byte) (i * 7 + 1);
+        check("RENEW at cap is exactly CARRIER_MAX bytes", wide.length == Const.CARRIER_MAX);
+        Wire.Decoded d = Wire.decode(wide, java.math.BigInteger.ZERO);
+        check("RENEW-selective decodes with all 9987 flag bytes",
+              d.kind == Wire.Kind.ACTION && d.action.flags.length == Const.FLAGS_MAX);
+        byte[] over = java.util.Arrays.copyOf(wide, wide.length + 1);
+        check("one byte past the L1 ceiling -> IGNORE",
+              Wire.decode(over, java.math.BigInteger.ZERO).kind == Wire.Kind.IGNORE);
+        byte[] xfer = new byte[4 + 20 + 5 + Const.FLAGS_XFER_MAX];
+        xfer[0] = Const.P0; xfer[1] = Const.P1; xfer[2] = Const.P2; xfer[3] = (byte) Const.TRANSFER;
+        d = Wire.decode(xfer, java.math.BigInteger.ZERO);
+        check("TRANSFER-selective decodes at FLAGS_XFER_MAX",
+              d.kind == Wire.Kind.ACTION && d.action.flags.length == Const.FLAGS_XFER_MAX);
+        byte[] xover = java.util.Arrays.copyOf(xfer, xfer.length + 1);
+        check("TRANSFER flags past the cap -> IGNORE",
+              Wire.decode(xover, java.math.BigInteger.ZERO).kind == Wire.Kind.IGNORE);
+    }
+
     private static void testDottedNames() {
         check("hyphen name valid", Wire.validName(Sm.utf8("shib-p2p")));
         check("32-byte name valid", Wire.validName(Sm.utf8("abcdefghijklmnopqrstuvwxyz0123ab")));
@@ -132,6 +155,7 @@ final class Selftest {
         check("secp256k1 KAT (constants/2G/n·G=∞/decompress/sign-verify-tamper)", Secp.selftest() == 0);
 
         testDottedNames();
+        testL1CarrierCeiling();
         testEcmhState();
 
         System.out.println("────");

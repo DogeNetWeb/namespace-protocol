@@ -248,7 +248,7 @@ public static class Modes
             int len = rng.Bnd(81);
             byte[] p = new byte[len];
             for (int i = 0; i < len; i++) p[i] = (byte)rng.Bnd(256);
-            if (rng.Bnd(3) == 0 && len >= 4) { p[0] = 0xFF; p[1] = 0x50; p[2] = 0x4E; p[3] = (byte)(1 + rng.Bnd(12)); } // 0x01..0x0C
+            if (rng.Bnd(3) == 0 && len >= 4) { p[0] = 0xFF; p[1] = 0x50; p[2] = 0x4E; p[3] = (byte)(1 + rng.Bnd(15)); } // 0x01..0x0F
             return p;
         }
         // grammar-aware: build a prefixed action-shaped payload, then maybe corrupt.
@@ -265,11 +265,13 @@ public static class Modes
 
     private static byte[] GrammarPayload(SplitMix64 rng)
     {
-        int op = 1 + rng.Bnd(12); // 0x01..0x0C
+        int op = 1 + rng.Bnd(15); // 0x01..0x0F
         int bodyLen = op switch
         {
             K.OP_COMMIT => 32,
             K.OP_CLAIM => 33 + rng.Bnd(32),
+            K.OP_RENEW_NAME or K.OP_RELEASE_NAME => 1 + rng.Bnd(32),
+            K.OP_TRANSFER_NAME => 21 + rng.Bnd(31),
             K.OP_RENEW => new[] { 0, 5, 6 + rng.Bnd(71) }[rng.Bnd(3)],
             K.OP_TRANSFER => rng.Bnd(2) == 0 ? 20 : 26 + rng.Bnd(51),
             K.OP_SELL => 13 + rng.Bnd(32),

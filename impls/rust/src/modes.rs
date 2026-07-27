@@ -385,7 +385,7 @@ fn fuzz_payload(rng: &mut SplitMix64) -> Vec<u8> {
             p[0] = 0xFF;
             p[1] = 0x50;
             p[2] = 0x4E;
-            p[3] = (1 + rng.bounded(12)) as u8;
+            p[3] = (1 + rng.bounded(15)) as u8;
         }
         return p;
     }
@@ -412,7 +412,7 @@ fn fuzz_payload(rng: &mut SplitMix64) -> Vec<u8> {
 }
 
 fn grammar_payload(rng: &mut SplitMix64) -> Vec<u8> {
-    let op = (1 + rng.bounded(12)) as u8; // 0x01..0x0C name-action range
+    let op = (1 + rng.bounded(15)) as u8; // 0x01..0x0F name-action range
     let body_len: usize = match op {
         OP_COMMIT => 32,
         OP_CLAIM => 33 + rng.bounded(20) as usize,
@@ -425,7 +425,8 @@ fn grammar_payload(rng: &mut SplitMix64) -> Vec<u8> {
             }
         }
         OP_SELL => 13 + rng.bounded(20) as usize,
-        OP_RESERVE | OP_SETTLE | OP_PAY => 1 + rng.bounded(20) as usize,
+        OP_RENEW_NAME | OP_RELEASE_NAME | OP_RESERVE | OP_SETTLE | OP_PAY => 1 + rng.bounded(20) as usize,
+        OP_TRANSFER_NAME => 21 + rng.bounded(31) as usize,
         OP_RELEASE => 6 + rng.bounded(71) as usize,
         OP_SELL_TO => 29 + rng.bounded(20) as usize,
         OP_AS => 1,

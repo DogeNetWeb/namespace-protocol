@@ -37,22 +37,25 @@
 
 #define SM_NAME_MAX           32             // [a-z0-9-] DNS label, 1..32 bytes + structural rules (§3.1)
 
-// ── §2 opcodes (names-only; contiguous 0x01–0x0C; all gate at ACTIVATION_HEIGHT) ──
+// ── §2 opcodes (contiguous 0x01–0x0F; all gate at ACTIVATION_HEIGHT) ────────
 enum {
-    SM_OP_COMMIT    = 0x01,
-    SM_OP_CLAIM     = 0x02,
-    SM_OP_RENEW     = 0x03,
-    SM_OP_TRANSFER  = 0x04,
-    SM_OP_SELL      = 0x05,
-    SM_OP_RESERVE   = 0x06,
-    SM_OP_SETTLE    = 0x07,
-    SM_OP_RELEASE   = 0x08,
-    SM_OP_SELL_TO   = 0x09,
-    SM_OP_PAY       = 0x0A,
-    SM_OP_AS        = 0x0B,
-    SM_OP_TRADE     = 0x0C,
+    SM_OP_RENEW_NAME    = 0x01,   // by-name renew: name(1..32)          (§3.5)
+    SM_OP_TRANSFER_NAME = 0x02,   // by-name gift:  target(20)+name      (§3.5/§3.6)
+    SM_OP_COMMIT        = 0x03,
+    SM_OP_CLAIM         = 0x04,
+    SM_OP_RENEW         = 0x05,
+    SM_OP_TRANSFER      = 0x06,
+    SM_OP_SELL          = 0x07,
+    SM_OP_RESERVE       = 0x08,
+    SM_OP_SETTLE        = 0x09,
+    SM_OP_RELEASE       = 0x0A,
+    SM_OP_RELEASE_NAME  = 0x0B,   // by-name relinquish: name(1..32)     (§3.5/§3.6)
+    SM_OP_SELL_TO       = 0x0C,
+    SM_OP_PAY           = 0x0D,
+    SM_OP_AS            = 0x0E,
+    SM_OP_TRADE         = 0x0F,
 };
-#define SM_OP_MIN  SM_OP_COMMIT
+#define SM_OP_MIN  SM_OP_RENEW_NAME
 #define SM_OP_MAX  SM_OP_TRADE
 
 // Script types (§4 Rule 2). Identity keys on the bare hash160; the type is a
@@ -63,7 +66,22 @@ enum { SM_P2PKH = 0, SM_P2SH = 1 };
 #define SM_MAX_INPUTS    8
 #define SM_MAX_CARRIERS  16
 #define SM_MAX_OUTS      16
-#define SM_FLAGS_MAX     71   // RENEW/TRANSFER/RELEASE bitmap bytes (fits 80-byte OP_RETURN)
+
+// ── the pinned carrier ceiling (§6) ─────────────────────────────────────────
+// A PROTOCOL constant, not an L1 rule: Pepecoin never size-checks an OP_RETURN
+// script (IsUnspendable() fires on the opcode; MAX_SCRIPT_SIZE and the 520-byte
+// element rule are execution-time, and an unspendable output never executes).
+// L1's only true bound is the ~1 MB serialized-tx limit. The pin is the payload
+// a MAX_SCRIPT_SIZE-sized script would carry — OP_RETURN(1) + OP_PUSHDATA2(1+2)
+// + one push — chosen so every impl keeps fixed-size, boundary-tested buffers;
+// raisable at an activation height if 79,896 names/carrier ever stops sufficing.
+// Relay policy (datacarriersize, default 83 script bytes → 80-byte payloads)
+// gates what nodes FORWARD, never what the fold ACCEPTS once mined.
+#define SM_L1_SCRIPT_MAX  10000
+#define SM_CARRIER_MAX    (SM_L1_SCRIPT_MAX - 4)   // 9996: max payload bytes
+#define SM_BODY_MAX       (SM_CARRIER_MAX - 4)     // 9992: after FF 'P' 'N' op
+#define SM_FLAGS_MAX      (SM_BODY_MAX - 5)        // 9987: RENEW/RELEASE bitmap bytes
+#define SM_FLAGS_XFER_MAX (SM_FLAGS_MAX - 20)      // 9967: TRANSFER (target eats 20)
 
 // A §4 identity, injected (never computed here).
 typedef struct { uint8_t h160[20]; uint8_t type; } SmId;
@@ -72,13 +90,13 @@ typedef struct { uint8_t h160[20]; uint8_t type; } SmId;
 typedef struct {
     uint8_t  op;
 
-    char     name[SM_NAME_MAX + 1];   uint8_t name_len;     // CLAIM/SELL/RESERVE/SETTLE/SELL_TO/PAY/TRADE
+    char     name[SM_NAME_MAX + 1];   uint8_t name_len;     // CLAIM/SELL/RESERVE/SETTLE/SELL_TO/PAY/TRADE + the by-name ops
     char     name_b[SM_NAME_MAX + 1]; uint8_t name_b_len;   // TRADE second name
 
     uint8_t  commitment[32];          // COMMIT
     uint8_t  salt[32];                // CLAIM
 
-    uint8_t  addr[20];                // TRANSFER target / SELL_TO buyer (hash160)
+    uint8_t  addr[20];                // TRANSFER/TRANSFER_NAME target / SELL_TO buyer (hash160)
     uint64_t price;                   // SELL / SELL_TO
     uint32_t window;                  // SELL (0 = default RESERVE_WINDOW)
 
@@ -87,7 +105,7 @@ typedef struct {
     // an anchor + flags.
     uint8_t  has_anchor;
     uint64_t anchor;                  // 5-byte absolute height anchor (fits u64)
-    uint8_t  flags[SM_FLAGS_MAX];     uint8_t flags_len;
+    uint8_t  flags[SM_FLAGS_MAX];     uint16_t flags_len;   // ≤ SM_FLAGS_MAX (> 255 possible)
 
     uint8_t  as_index;                // AS: vin[index] becomes acting identity
     uint8_t  idx_a, idx_b;            // TRADE: the two input indices
@@ -108,14 +126,15 @@ typedef struct { uint8_t h160[20]; uint8_t type; uint64_t value; uint32_t vout; 
 
 // The abstract tx imposes NO per-tx count cap (spec §0: "any cap is relay, never
 // protocol"). Inputs/carriers/outs live behind pointers that default to embedded
-// inline storage and spill to the heap past it — so an honest tx never allocates,
+// inline storage and spill to the heap past it — so a typical tx allocates little,
 // yet a pathological large tx folds identically to an unbounded impl. SM_INLINE_*
-// are storage hints, NOT protocol limits (they equal the historical caps so every
-// pre-2026-07-03 tx keeps its exact byte layout). Build via sm_tx_input/carrier/out;
-// release with sm_tx_free (a no-op while inline). Never copy an SmTx by value — the
-// pointers would dangle; build in place.
+// are storage hints, NOT protocol limits. Carriers inline at ONE: an SmCarrier
+// embeds the full SM_FLAGS_MAX action, so each inline slot costs ~10 KB — one
+// covers the overwhelmingly common single-carrier tx and the rest spill.
+// Build via sm_tx_input/carrier/out; release with sm_tx_free (a no-op while
+// inline). Never copy an SmTx by value — the pointers would dangle; build in place.
 #define SM_INLINE_INPUTS    8
-#define SM_INLINE_CARRIERS  16
+#define SM_INLINE_CARRIERS  1
 #define SM_INLINE_OUTS      16
 // Synthetic-tx vout layout (test harnesses only: carriers occupy vout 0.., outs
 // start here). Digest-relevant, so pinned at the historical value; real chain txs
@@ -285,6 +304,9 @@ void sm_op_claim   (SmState *s, SmTxCtx *cx, const SmAction *a);
 void sm_op_renew   (SmState *s, SmTxCtx *cx, const SmAction *a);
 void sm_op_transfer(SmState *s, SmTxCtx *cx, const SmAction *a);
 void sm_op_release (SmState *s, SmTxCtx *cx, const SmAction *a);
+void sm_op_renew_name   (SmState *s, SmTxCtx *cx, const SmAction *a);   // §3.5 by-name forms
+void sm_op_transfer_name(SmState *s, SmTxCtx *cx, const SmAction *a);
+void sm_op_release_name (SmState *s, SmTxCtx *cx, const SmAction *a);
 void sm_op_sell    (SmState *s, SmTxCtx *cx, const SmAction *a);
 void sm_op_reserve (SmState *s, SmTxCtx *cx, const SmAction *a);
 void sm_op_settle  (SmState *s, SmTxCtx *cx, const SmAction *a);
@@ -358,16 +380,16 @@ uint64_t sm_record_chain(uint64_t seed, uint64_t count,
 // on validity", §0) lives in, exercised by `sm fuzz`. Pinned in SPEC-conformance.md.
 
 // Decode one OP_RETURN payload (the bytes of the single minimal push, §1) into a
-// carrier: ACTION (prefix 0xFF 'P' 'N' + opcode 0x01..0x0C, fields parse per §2/§3)
+// carrier: ACTION (prefix 0xFF 'P' 'N' + opcode 0x01..0x0F, fields parse per §2/§3)
 // or IGNORE (everything else — unknown opcode, field/length mismatch, non-prefix).
 // `value` is unused by the demux (kept for call-site uniformity); the caller sets
-// car->value/car->vout. Fail-closed. `len` ≤ 80.
+// car->value/car->vout. Fail-closed. `len` ≤ SM_CARRIER_MAX.
 void sm_decode_payload(const uint8_t *payload, size_t len, uint64_t value, SmCarrier *car);
 
 // Canonical wire encoding of a well-formed action (the inverse of the action path
-// of sm_decode_payload). Writes ≤ 80 bytes to out, returns the length, or 0 if `a`
-// is not encodable (bad opcode / field). Used by the grammar-aware fuzzer.
-size_t sm_encode_action(const SmAction *a, uint8_t out[80]);
+// of sm_decode_payload). Writes ≤ SM_CARRIER_MAX bytes to out, returns the length,
+// or 0 if `a` is not encodable (bad opcode / field). Used by the grammar-aware fuzzer.
+size_t sm_encode_action(const SmAction *a, uint8_t out[SM_CARRIER_MAX]);
 
 // ── property/reorg fingerprints (harness.c) ──────────────────────────────────
 // Per-block property fingerprint: hashes order-independent derived aggregates

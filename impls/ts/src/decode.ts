@@ -7,7 +7,7 @@
 // impls but is not consulted by demux.
 import type { Bytes } from "./bytes.ts";
 import { rdLE } from "./bytes.ts";
-import { OP, OP_MIN, OP_MAX, PREFIX0, PREFIX1, PREFIX2 } from "./constants.ts";
+import { OP, OP_MIN, OP_MAX, PREFIX0, PREFIX1, PREFIX2, BODY_MAX } from "./constants.ts";
 
 export type DecodeKind = "ACTION" | "IGNORE";
 
@@ -17,7 +17,8 @@ export type Action =
   | { op: typeof OP.RENEW; mode: "all" | "all-safe" | "selective"; anchor: bigint; flags: Bytes }
   | { op: typeof OP.TRANSFER; mode: "all" | "selective"; target: Bytes; anchor: bigint; flags: Bytes }
   | { op: typeof OP.SELL; price: bigint; window: bigint; name: Bytes }
-  | { op: typeof OP.RESERVE | typeof OP.SETTLE | typeof OP.PAY; name: Bytes }
+  | { op: typeof OP.RENEW_NAME | typeof OP.RELEASE_NAME | typeof OP.RESERVE | typeof OP.SETTLE | typeof OP.PAY; name: Bytes }
+  | { op: typeof OP.TRANSFER_NAME; target: Bytes; name: Bytes }
   | { op: typeof OP.RELEASE; anchor: bigint; flags: Bytes }
   | { op: typeof OP.SELL_TO; price: bigint; buyer: Bytes; name: Bytes }
   | { op: typeof OP.AS; index: number }
@@ -113,19 +114,19 @@ function decodeAction(payload: Bytes): Action | null {
     case OP.RENEW: {
       if (bl === 0) return { op: OP.RENEW, mode: "all", anchor: 0n, flags: new Uint8Array(0) };
       if (bl === 5) return { op: OP.RENEW, mode: "all-safe", anchor: rdLE(b, 0, 5), flags: new Uint8Array(0) };
-      if (bl >= 6 && bl <= 76)
+      if (bl >= 6 && bl <= BODY_MAX)
         return { op: OP.RENEW, mode: "selective", anchor: rdLE(b, 0, 5), flags: b.subarray(5) };
-      return null; // bl ∈ {1,2,3,4} or >76 invalid
+      return null; // bl ∈ {1,2,3,4} or >BODY_MAX invalid
     }
     case OP.TRANSFER: {
       if (bl === 20)
         return { op: OP.TRANSFER, mode: "all", target: b.subarray(0, 20), anchor: 0n, flags: new Uint8Array(0) };
-      if (bl >= 26 && bl <= 76)
+      if (bl >= 26 && bl <= BODY_MAX)
         return {
           op: OP.TRANSFER, mode: "selective", target: b.subarray(0, 20),
           anchor: rdLE(b, 20, 5), flags: b.subarray(25),
         };
-      return null; // bl ∈ [21,25], <20, >76 invalid
+      return null; // bl ∈ [21,25], <20, >BODY_MAX invalid
     }
     case OP.SELL: {
       if (bl < 13 || bl > 44) return null; // price8 + window4 + name1..32
@@ -133,6 +134,8 @@ function decodeAction(payload: Bytes): Action | null {
       if (!validName(name)) return null;
       return { op: OP.SELL, price: rdLE(b, 0, 8), window: rdLE(b, 8, 4), name };
     }
+    case OP.RENEW_NAME:
+    case OP.RELEASE_NAME:
     case OP.RESERVE:
     case OP.SETTLE:
     case OP.PAY: {
@@ -141,8 +144,14 @@ function decodeAction(payload: Bytes): Action | null {
       if (!validName(name)) return null;
       return { op, name };
     }
+    case OP.TRANSFER_NAME: {
+      if (bl < 21 || bl > 52) return null; // target20 + name1..32
+      const name = b.subarray(20);
+      if (!validName(name)) return null;
+      return { op: OP.TRANSFER_NAME, target: b.subarray(0, 20), name };
+    }
     case OP.RELEASE: {
-      if (bl < 6 || bl > 76) return null; // anchor5 + flags1..71
+      if (bl < 6 || bl > BODY_MAX) return null; // anchor5 + flags1..FLAGS_MAX
       return { op: OP.RELEASE, anchor: rdLE(b, 0, 5), flags: b.subarray(5) };
     }
     case OP.SELL_TO: {

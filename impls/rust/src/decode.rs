@@ -10,6 +10,9 @@ pub enum Action {
     Claim { salt: [u8; 32], name: Vec<u8> },
     Renew { mode: RenewMode },
     Transfer { target: Hash160, sel: Option<BitmapSel> },
+    RenewName { name: Vec<u8> },
+    TransferName { target: Hash160, name: Vec<u8> },
+    ReleaseName { name: Vec<u8> },
     Sell { price: u64, window: u32, name: Vec<u8> },
     Reserve { name: Vec<u8> },
     Settle { name: Vec<u8> },
@@ -24,7 +27,7 @@ pub enum Action {
 pub enum RenewMode {
     All,                              // bl == 0
     AllSafe { anchor: i64 },          // bl == 5
-    Selective { anchor: i64, flags: Vec<u8> }, // bl 6..=76
+    Selective { anchor: i64, flags: Vec<u8> }, // bl 6..=BODY_MAX
 }
 
 /// A bitmap selection (anchor + flag bytes), used by TRANSFER selective.
@@ -106,7 +109,7 @@ fn decode_action(opcode: u8, b: &[u8]) -> Option<Action> {
             5 => Some(Action::Renew {
                 mode: RenewMode::AllSafe { anchor: rd_h5_le(&b[..5]) },
             }),
-            6..=76 => Some(Action::Renew {
+            6..=BODY_MAX => Some(Action::Renew {
                 mode: RenewMode::Selective {
                     anchor: rd_h5_le(&b[..5]),
                     flags: b[5..].to_vec(),
@@ -115,12 +118,12 @@ fn decode_action(opcode: u8, b: &[u8]) -> Option<Action> {
             _ => None, // bl 1..4 invalid
         },
         OP_TRANSFER => {
-            // all: bl==20 ; selective: 20+anchor5+flags1..51 → bl 26..=76
+            // all: bl==20 ; selective: 20+anchor5+flags1..FLAGS_XFER_MAX → bl 26..=BODY_MAX
             if bl == 20 {
                 let mut t = [0u8; 20];
                 t.copy_from_slice(&b[..20]);
                 Some(Action::Transfer { target: t, sel: None })
-            } else if (26..=76).contains(&bl) {
+            } else if (26..=BODY_MAX).contains(&bl) {
                 let mut t = [0u8; 20];
                 t.copy_from_slice(&b[..20]);
                 let anchor = rd_h5_le(&b[20..25]);
@@ -146,7 +149,7 @@ fn decode_action(opcode: u8, b: &[u8]) -> Option<Action> {
             let window = rd_u32_le(&b[8..12]);
             Some(Action::Sell { price, window, name: name.to_vec() })
         }
-        OP_RESERVE | OP_SETTLE | OP_PAY => {
+        OP_RENEW_NAME | OP_RELEASE_NAME | OP_RESERVE | OP_SETTLE | OP_PAY => {
             // name1..32 → bl 1..=32
             if bl < 1 || bl > 32 {
                 return None;
@@ -156,14 +159,29 @@ fn decode_action(opcode: u8, b: &[u8]) -> Option<Action> {
             }
             let name = b.to_vec();
             Some(match opcode {
+                OP_RENEW_NAME => Action::RenewName { name },
+                OP_RELEASE_NAME => Action::ReleaseName { name },
                 OP_RESERVE => Action::Reserve { name },
                 OP_SETTLE => Action::Settle { name },
                 _ => Action::Pay { name },
             })
         }
+        OP_TRANSFER_NAME => {
+            // target20 + name1..32 → bl 21..=52
+            if bl < 21 || bl > 52 {
+                return None;
+            }
+            let name = &b[20..];
+            if !valid_name(name) {
+                return None;
+            }
+            let mut t = [0u8; 20];
+            t.copy_from_slice(&b[..20]);
+            Some(Action::TransferName { target: t, name: name.to_vec() })
+        }
         OP_RELEASE => {
-            // anchor5 + flags1..71 → bl 6..=76
-            if bl < 6 || bl > 76 {
+            // anchor5 + flags1..FLAGS_MAX → bl 6..=BODY_MAX
+            if bl < 6 || bl > BODY_MAX {
                 return None;
             }
             let anchor = rd_h5_le(&b[..5]);

@@ -215,10 +215,12 @@ final class Modes {
         return payload;
     }
     static byte[] grammarPayload(Rng rng) {
-        int op = 1 + rng.bnd(12);   // 0x01..0x0C names-only registry
+        int op = 1 + rng.bnd(15);   // 0x01..0x0F registry
         int bodyLen = switch (op) {
             case Const.COMMIT -> 32;
             case Const.CLAIM -> 33 + rng.bnd(32);
+            case Const.RENEW_NAME, Const.RELEASE_NAME -> 1 + rng.bnd(32);
+            case Const.TRANSFER_NAME -> 21 + rng.bnd(31);
             case Const.RENEW -> new int[]{0, 5, 6 + rng.bnd(71)}[rng.bnd(3)];
             case Const.TRANSFER -> rng.bnd(2) == 0 ? 20 : 26 + rng.bnd(51);
             case Const.SELL -> 13 + rng.bnd(32);

@@ -123,7 +123,7 @@ func decodeAction(payload []byte) Carrier {
 		return c
 
 	case OP_RENEW:
-		// 0 = all; 5 = all-safe (anchor5); [6,76] = selective (anchor5 + flags1..71)
+		// 0 = all; 5 = all-safe (anchor5); [6,BODY_MAX] = selective (anchor5 + flags1..FLAGS_MAX)
 		switch {
 		case bl == 0:
 			return c
@@ -131,26 +131,26 @@ func decodeAction(payload []byte) Carrier {
 			c.hasAnchor = true
 			c.anchor = leU40(body[0:5])
 			return c
-		case bl >= 6 && bl <= 76:
+		case bl >= 6 && bl <= BODY_MAX:
 			c.hasAnchor = true
 			c.anchor = leU40(body[0:5])
-			c.flags = cloneBytes(body[5:]) // 1..71 bytes
+			c.flags = cloneBytes(body[5:]) // 1..FLAGS_MAX bytes
 			return c
 		default:
 			return ig
 		}
 
 	case OP_TRANSFER:
-		// 20 = all; [26,76] = selective (target20 + anchor5 + flags1..51)
+		// 20 = all; [26,BODY_MAX] = selective (target20 + anchor5 + flags1..FLAGS_XFER_MAX)
 		switch {
 		case bl == 20:
 			copy(c.target[:], body[0:20])
 			return c
-		case bl >= 26 && bl <= 76:
+		case bl >= 26 && bl <= BODY_MAX:
 			copy(c.target[:], body[0:20])
 			c.hasAnchor = true
 			c.anchor = leU40(body[20:25])
-			c.flags = cloneBytes(body[25:]) // 1..51
+			c.flags = cloneBytes(body[25:]) // 1..FLAGS_XFER_MAX
 			return c
 		default:
 			return ig
@@ -169,7 +169,7 @@ func decodeAction(payload []byte) Carrier {
 		c.name = cloneBytes(nm)
 		return c
 
-	case OP_RESERVE, OP_SETTLE, OP_PAY:
+	case OP_RENEW_NAME, OP_RELEASE_NAME, OP_RESERVE, OP_SETTLE, OP_PAY:
 		if bl < 1 || bl > 32 { // name1..32
 			return ig
 		}
@@ -179,13 +179,25 @@ func decodeAction(payload []byte) Carrier {
 		c.name = cloneBytes(body)
 		return c
 
+	case OP_TRANSFER_NAME:
+		if bl < 21 || bl > 52 { // target20 + name1..32
+			return ig
+		}
+		copy(c.target[:], body[0:20])
+		nm := body[20:]
+		if !validName(nm) {
+			return ig
+		}
+		c.name = cloneBytes(nm)
+		return c
+
 	case OP_RELEASE:
-		if bl < 6 || bl > 76 {
+		if bl < 6 || bl > BODY_MAX {
 			return ig
 		}
 		c.hasAnchor = true
 		c.anchor = leU40(body[0:5])
-		c.flags = cloneBytes(body[5:]) // 1..71
+		c.flags = cloneBytes(body[5:]) // 1..FLAGS_MAX
 		return c
 
 	case OP_SELL_TO:

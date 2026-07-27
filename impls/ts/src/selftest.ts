@@ -10,7 +10,7 @@ import { decodePayload, singleMinimalPush, validName } from "./decode.ts";
 import { Fold } from "./fold.ts";
 import type { FoldTx } from "./fold.ts";
 import { oracleRate, computeMTP } from "./oracle.ts";
-import { OP, PREFIX0, PREFIX1, PREFIX2, RESERVE_WINDOW, DIRECT_WINDOW, REORG_BUFFER, BILLING_UNIT, MAX_LEASE } from "./constants.ts";
+import { OP, PREFIX0, PREFIX1, PREFIX2, RESERVE_WINDOW, DIRECT_WINDOW, REORG_BUFFER, BILLING_UNIT, MAX_LEASE, BODY_MAX } from "./constants.ts";
 import * as B from "./builders.ts";
 import { attribute, parseTx } from "./attribution.ts";
 import {
@@ -124,14 +124,19 @@ function tDecoder(): void {
   eq("CLAIM 65 (name33)", dk(frame(OP.CLAIM, concat(new Uint8Array(32), enc("a".repeat(33))))), "IGNORE");
   eq("CLAIM bad name byte", dk(frame(OP.CLAIM, concat(new Uint8Array(32), enc("A")))), "IGNORE");
   eq("CLAIM leading hyphen → ignore", dk(frame(OP.CLAIM, concat(new Uint8Array(32), enc("-a")))), "IGNORE");
-  // RENEW modes 0/5/6..76, invalid 1..4
+  // RENEW modes 0/5/6..BODY_MAX (§6 pinned ceiling), invalid 1..4
   eq("RENEW all bl0", dk(frame(OP.RENEW, new Uint8Array(0)), 1n), "ACTION");
   eq("RENEW all-safe bl5", dk(frame(OP.RENEW, new Uint8Array(5)), 1n), "ACTION");
   eq("RENEW sel bl6", dk(frame(OP.RENEW, new Uint8Array(6)), 1n), "ACTION");
   eq("RENEW bl1 invalid", dk(frame(OP.RENEW, new Uint8Array(1)), 1n), "IGNORE");
   eq("RENEW bl4 invalid", dk(frame(OP.RENEW, new Uint8Array(4)), 1n), "IGNORE");
-  eq("RENEW bl76 max", dk(frame(OP.RENEW, new Uint8Array(76)), 1n), "ACTION");
-  eq("RENEW bl77 over", dk(frame(OP.RENEW, new Uint8Array(77)), 1n), "IGNORE");
+  eq("RENEW bl77 valid (past the old 80-byte carrier)", dk(frame(OP.RENEW, new Uint8Array(77)), 1n), "ACTION");
+  eq("RENEW bl at BODY_MAX (9992)", dk(frame(OP.RENEW, new Uint8Array(BODY_MAX)), 1n), "ACTION");
+  eq("RENEW bl past BODY_MAX", dk(frame(OP.RENEW, new Uint8Array(BODY_MAX + 1)), 1n), "IGNORE");
+  eq("TRANSFER sel at BODY_MAX", dk(frame(OP.TRANSFER, new Uint8Array(BODY_MAX))), "ACTION");
+  eq("TRANSFER sel past BODY_MAX", dk(frame(OP.TRANSFER, new Uint8Array(BODY_MAX + 1))), "IGNORE");
+  eq("RELEASE at BODY_MAX", dk(frame(OP.RELEASE, new Uint8Array(BODY_MAX)), 1n), "ACTION");
+  eq("RELEASE past BODY_MAX", dk(frame(OP.RELEASE, new Uint8Array(BODY_MAX + 1)), 1n), "IGNORE");
   // TRANSFER 20, 26..76, invalid 21..25
   eq("TRANSFER all bl20", dk(frame(OP.TRANSFER, new Uint8Array(20))), "ACTION");
   eq("TRANSFER bl21 invalid", dk(frame(OP.TRANSFER, new Uint8Array(21))), "IGNORE");

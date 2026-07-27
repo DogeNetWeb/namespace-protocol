@@ -6,9 +6,10 @@ length mismatch => IGNORE (fail closed). A malformed input never raises.
 Decode operates on the *payload* = the bytes of the single minimal push (§1).
 `single_minimal_push` extracts that from a raw scriptPubKey for completeness.
 """
-from const import (PREFIX, OP_COMMIT, OP_CLAIM,
+from const import (PREFIX, OP_RENEW_NAME, OP_TRANSFER_NAME, OP_COMMIT, OP_CLAIM,
+                   CARRIER_MAX, BODY_MAX,
                    OP_RENEW, OP_TRANSFER, OP_SELL, OP_RESERVE, OP_SETTLE,
-                   OP_RELEASE, OP_SELL_TO, OP_PAY, OP_AS, OP_TRADE)
+                   OP_RELEASE, OP_RELEASE_NAME, OP_SELL_TO, OP_PAY, OP_AS, OP_TRADE)
 
 IGNORE = "IGNORE"
 ACTION = "ACTION"
@@ -82,7 +83,7 @@ def single_minimal_push(spk):
         return None
     if i != n:
         return None  # trailing bytes / extra opcode
-    if len(data) > 80:
+    if len(data) > CARRIER_MAX:
         return None
     return data
 
@@ -108,10 +109,10 @@ def decode_payload(payload, value):
 
 def _decode(payload, value):
     n = len(payload)
-    # ACTION prefix test: len>=4, payload[0:3]==FF 53 50, opcode 0x01..0x0C
+    # ACTION prefix test: len>=4, payload[0:3]==FF 53 50, opcode 0x01..0x0F
     if n >= 4 and payload[0:3] == PREFIX:
         op = payload[3]
-        if not (OP_COMMIT <= op <= OP_TRADE):
+        if not (OP_RENEW_NAME <= op <= OP_TRADE):
             return (IGNORE, None)   # unknown / overlay band
         b = payload[4:]
         bl = n - 4
@@ -145,7 +146,7 @@ def _decode_action(op, b, bl):
             return {"mode": "all"}
         if bl == 5:
             return {"mode": "all_safe", "anchor": _u32_5(b[0:5])}
-        if 6 <= bl <= 76:
+        if 6 <= bl <= BODY_MAX:
             return {"mode": "selective", "anchor": _u32_5(b[0:5]),
                     "flags": b[5:]}
         return None
@@ -153,7 +154,7 @@ def _decode_action(op, b, bl):
     if op == OP_TRANSFER:
         if bl == 20:
             return {"mode": "all", "target": b[0:20]}
-        if 26 <= bl <= 76:
+        if 26 <= bl <= BODY_MAX:
             return {"mode": "selective", "target": b[0:20],
                     "anchor": _u32_5(b[20:25]), "flags": b[25:]}
         return None
@@ -168,7 +169,7 @@ def _decode_action(op, b, bl):
             return None
         return {"price": price, "window": window, "name": name}
 
-    if op in (OP_RESERVE, OP_SETTLE, OP_PAY):
+    if op in (OP_RENEW_NAME, OP_RELEASE_NAME, OP_RESERVE, OP_SETTLE, OP_PAY):
         if not (1 <= bl <= 32):    # name1..32
             return None
         name = b[0:bl]
@@ -176,8 +177,17 @@ def _decode_action(op, b, bl):
             return None
         return {"name": name}
 
+    if op == OP_TRANSFER_NAME:
+        if not (21 <= bl <= 52):   # target20 + name1..32
+            return None
+        target = b[0:20]
+        name = b[20:]
+        if not valid_name(name):
+            return None
+        return {"target": target, "name": name}
+
     if op == OP_RELEASE:
-        if not (6 <= bl <= 76):
+        if not (6 <= bl <= BODY_MAX):
             return None
         return {"anchor": _u32_5(b[0:5]), "flags": b[5:]}
 

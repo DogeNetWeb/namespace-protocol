@@ -35,23 +35,23 @@ static int decode_action(const uint8_t *b, size_t blen, uint8_t op, SmAction *a)
         memcpy(a->name, b + 32, nl); a->name[nl] = 0; a->name_len = (uint8_t)nl;
         return 1;
     }
-    case SM_OP_RENEW:                                          // 0=all | 5=all-safe | 6..76=selective
+    case SM_OP_RENEW:                                          // 0=all | 5=all-safe | 6..SM_BODY_MAX=selective
         if (blen == 0) { a->has_anchor = 0; a->flags_len = 0; return 1; }
         if (blen == 5) { a->has_anchor = 1; a->anchor = rd5(b); a->flags_len = 0; return 1; }
-        if (blen >= 6 && blen <= 76) {
+        if (blen >= 6 && blen <= SM_BODY_MAX) {
             a->has_anchor = 1; a->anchor = rd5(b);
-            size_t fl = blen - 5;                              // 1..71
-            memcpy(a->flags, b + 5, fl); a->flags_len = (uint8_t)fl;
+            size_t fl = blen - 5;                              // 1..SM_FLAGS_MAX
+            memcpy(a->flags, b + 5, fl); a->flags_len = (uint16_t)fl;
             return 1;
         }
         return 0;
-    case SM_OP_TRANSFER:                                       // 20=all | 26..76=selective
+    case SM_OP_TRANSFER:                                       // 20=all | 26..SM_BODY_MAX=selective
         if (blen == 20) { memcpy(a->addr, b, 20); a->has_anchor = 0; return 1; }
-        if (blen >= 26 && blen <= 76) {
+        if (blen >= 26 && blen <= SM_BODY_MAX) {
             memcpy(a->addr, b, 20);
             a->has_anchor = 1; a->anchor = rd5(b + 20);
-            size_t fl = blen - 25;                             // 1..51
-            memcpy(a->flags, b + 25, fl); a->flags_len = (uint8_t)fl;
+            size_t fl = blen - 25;                             // 1..SM_FLAGS_XFER_MAX
+            memcpy(a->flags, b + 25, fl); a->flags_len = (uint16_t)fl;
             return 1;
         }
         return 0;
@@ -63,6 +63,8 @@ static int decode_action(const uint8_t *b, size_t blen, uint8_t op, SmAction *a)
         memcpy(a->name, b + 12, nl); a->name[nl] = 0; a->name_len = (uint8_t)nl;
         return 1;
     }
+    case SM_OP_RENEW_NAME:
+    case SM_OP_RELEASE_NAME:
     case SM_OP_RESERVE:
     case SM_OP_SETTLE:
     case SM_OP_PAY: {                                          // name(1..32)
@@ -71,10 +73,18 @@ static int decode_action(const uint8_t *b, size_t blen, uint8_t op, SmAction *a)
         memcpy(a->name, b, blen); a->name[blen] = 0; a->name_len = (uint8_t)blen;
         return 1;
     }
-    case SM_OP_RELEASE:                                        // anchor(5)+flags(1..71)
-        if (blen < 6 || blen > 76) return 0;
+    case SM_OP_TRANSFER_NAME: {                                // target(20)+name(1..32)
+        if (blen < 21 || blen > 52) return 0;
+        memcpy(a->addr, b, 20);
+        size_t nl = blen - 20;
+        if (!sm_name_valid((const char *)(b + 20), nl)) return 0;
+        memcpy(a->name, b + 20, nl); a->name[nl] = 0; a->name_len = (uint8_t)nl;
+        return 1;
+    }
+    case SM_OP_RELEASE:                                        // anchor(5)+flags(1..SM_FLAGS_MAX)
+        if (blen < 6 || blen > SM_BODY_MAX) return 0;
         a->has_anchor = 1; a->anchor = rd5(b);
-        { size_t fl = blen - 5; memcpy(a->flags, b + 5, fl); a->flags_len = (uint8_t)fl; }
+        { size_t fl = blen - 5; memcpy(a->flags, b + 5, fl); a->flags_len = (uint16_t)fl; }
         return 1;
     case SM_OP_SELL_TO: {                                      // price(8)+buyer(20)+name(1..32)
         if (blen < 29 || blen > 60) return 0;
@@ -103,7 +113,7 @@ static int decode_action(const uint8_t *b, size_t blen, uint8_t op, SmAction *a)
         return 1;
     }
     default:
-        return 0;                                             // outside 0x01..0x0C
+        return 0;                                             // outside 0x01..0x0F
     }
 }
 
@@ -112,7 +122,7 @@ void sm_decode_payload(const uint8_t *payload, size_t len, uint64_t value, SmCar
     memset(&car->act, 0, sizeof car->act);
     car->kind = SM_CAR_IGNORE;
 
-    // §1 action recognition: prefix 0xFF 'P' 'N' + opcode 0x01..0x0C.
+    // §1 action recognition: prefix 0xFF 'P' 'N' + opcode 0x01..0x0F.
     if (len >= 4 && payload[0] == 0xFF && payload[1] == 0x50 && payload[2] == 0x4E) {
         uint8_t op = payload[3];
         if (op >= SM_OP_MIN && op <= SM_OP_MAX &&
@@ -126,7 +136,7 @@ void sm_decode_payload(const uint8_t *payload, size_t len, uint64_t value, SmCar
 }
 
 // ── canonical action encoder (inverse of decode_action; grammar-aware fuzz) ──
-size_t sm_encode_action(const SmAction *a, uint8_t out[80]) {
+size_t sm_encode_action(const SmAction *a, uint8_t out[SM_CARRIER_MAX]) {
     out[0] = 0xFF; out[1] = 0x50; out[2] = 0x4E; out[3] = a->op;
     uint8_t *b = out + 4;
     switch (a->op) {
@@ -138,28 +148,33 @@ size_t sm_encode_action(const SmAction *a, uint8_t out[80]) {
     case SM_OP_RENEW:
         if (!a->has_anchor && a->flags_len == 0) return 4;                 // all
         if (a->has_anchor && a->flags_len == 0) { wr5(b, a->anchor); return 9; }   // all-safe
-        if (a->has_anchor && a->flags_len >= 1 && a->flags_len <= 71) {
-            wr5(b, a->anchor); memcpy(b + 5, a->flags, a->flags_len); return 9 + a->flags_len;
+        if (a->has_anchor && a->flags_len >= 1 && a->flags_len <= SM_FLAGS_MAX) {
+            wr5(b, a->anchor); memcpy(b + 5, a->flags, a->flags_len); return 9 + (size_t)a->flags_len;
         }
         return 0;
     case SM_OP_TRANSFER:
         memcpy(b, a->addr, 20);
         if (!a->has_anchor) return 24;                                     // all
-        if (a->flags_len >= 1 && a->flags_len <= 51) {
-            wr5(b + 20, a->anchor); memcpy(b + 25, a->flags, a->flags_len); return 29 + a->flags_len;
+        if (a->flags_len >= 1 && a->flags_len <= SM_FLAGS_XFER_MAX) {
+            wr5(b + 20, a->anchor); memcpy(b + 25, a->flags, a->flags_len); return 29 + (size_t)a->flags_len;
         }
         return 0;
     case SM_OP_SELL:
         if (a->name_len < 1 || a->name_len > 32) return 0;
         wr64(b, a->price); wr32(b + 8, a->window); memcpy(b + 12, a->name, a->name_len); return 16 + a->name_len;
+    case SM_OP_RENEW_NAME:
+    case SM_OP_RELEASE_NAME:
     case SM_OP_RESERVE:
     case SM_OP_SETTLE:
     case SM_OP_PAY:
         if (a->name_len < 1 || a->name_len > 32) return 0;
         memcpy(b, a->name, a->name_len); return 4 + a->name_len;
+    case SM_OP_TRANSFER_NAME:
+        if (a->name_len < 1 || a->name_len > 32) return 0;
+        memcpy(b, a->addr, 20); memcpy(b + 20, a->name, a->name_len); return 24 + a->name_len;
     case SM_OP_RELEASE:
-        if (a->flags_len < 1 || a->flags_len > 71) return 0;
-        wr5(b, a->anchor); memcpy(b + 5, a->flags, a->flags_len); return 9 + a->flags_len;
+        if (a->flags_len < 1 || a->flags_len > SM_FLAGS_MAX) return 0;
+        wr5(b, a->anchor); memcpy(b + 5, a->flags, a->flags_len); return 9 + (size_t)a->flags_len;
     case SM_OP_SELL_TO:
         if (a->name_len < 1 || a->name_len > 32) return 0;
         wr64(b, a->price); memcpy(b + 8, a->addr, 20); memcpy(b + 28, a->name, a->name_len); return 32 + a->name_len;

@@ -51,14 +51,14 @@ final class Wire {
             case Const.RENEW -> {
                 if (bl == 0) { a.renewMode = 0; }                       // all
                 else if (bl == 5) { a.renewMode = 1; a.anchor = Buf.u40(b, 0); } // all-safe
-                else if (bl >= 6 && bl <= 76) {                          // selective: anchor5 + flags 1..71
+                else if (bl >= 6 && bl <= Const.BODY_MAX) {              // selective: anchor5 + flags 1..FLAGS_MAX
                     a.renewMode = 2; a.anchor = Buf.u40(b, 0);
                     a.flags = Arrays.copyOfRange(b, 5, bl);
                 } else return null;
             }
             case Const.TRANSFER -> {
                 if (bl == 20) { a.tTarget = Arrays.copyOfRange(b, 0, 20); a.selective = false; } // all
-                else if (bl >= 26 && bl <= 76) {                         // selective: target20 + anchor5 + flags 1..51
+                else if (bl >= 26 && bl <= Const.BODY_MAX) {             // selective: target20 + anchor5 + flags 1..FLAGS_XFER_MAX
                     a.tTarget = Arrays.copyOfRange(b, 0, 20);
                     a.anchor = Buf.u40(b, 20);
                     a.flags = Arrays.copyOfRange(b, 25, bl);
@@ -72,13 +72,19 @@ final class Wire {
                 a.name = Arrays.copyOfRange(b, 12, bl);
                 if (!validName(a.name)) return null;
             }
-            case Const.RESERVE, Const.SETTLE, Const.PAY -> {
+            case Const.RENEW_NAME, Const.RELEASE_NAME, Const.RESERVE, Const.SETTLE, Const.PAY -> {
                 if (bl < 1 || bl > 32) return null;     // name1..32
                 a.name = Arrays.copyOfRange(b, 0, bl);
                 if (!validName(a.name)) return null;
             }
+            case Const.TRANSFER_NAME -> {
+                if (bl < 21 || bl > 52) return null;    // target20 + name1..32
+                a.tTarget = Arrays.copyOfRange(b, 0, 20);
+                a.name = Arrays.copyOfRange(b, 20, bl);
+                if (!validName(a.name)) return null;
+            }
             case Const.RELEASE -> {
-                if (bl < 6 || bl > 76) return null;                      // anchor5 + flags 1..71
+                if (bl < 6 || bl > Const.BODY_MAX) return null;          // anchor5 + flags 1..FLAGS_MAX
                 a.anchor = Buf.u40(b, 0);
                 a.flags = Arrays.copyOfRange(b, 5, bl);
             }
@@ -105,7 +111,7 @@ final class Wire {
                 a.nameB = Arrays.copyOfRange(rest, comma + 1, rest.length);
                 if (!validName(a.nameA) || !validName(a.nameB)) return null;
             }
-            default -> { return null; }   // opcode out of 0x01..0x0C
+            default -> { return null; }   // opcode out of 0x01..0x0F
         }
         return a;
     }
@@ -126,7 +132,8 @@ final class Wire {
                 if (a.selective) body.bytes(le40(a.anchor)).bytes(a.flags);
             }
             case Const.SELL -> body.u64(a.price).u32(a.window).bytes(a.name);
-            case Const.RESERVE, Const.SETTLE, Const.PAY -> body.bytes(a.name);
+            case Const.RENEW_NAME, Const.RELEASE_NAME, Const.RESERVE, Const.SETTLE, Const.PAY -> body.bytes(a.name);
+            case Const.TRANSFER_NAME -> body.bytes(a.tTarget).bytes(a.name);
             case Const.RELEASE -> body.bytes(le40(a.anchor)).bytes(a.flags);
             case Const.SELL_TO -> body.u64(a.price).bytes(a.buyer).bytes(a.name);
             case Const.AS -> body.u8(a.asIndex);

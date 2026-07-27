@@ -170,6 +170,12 @@ class State:
             self._do_transfer(info, aid, height)
         elif op == OP_RELEASE:
             self._do_release(info, aid, height)
+        elif op == OP_RENEW_NAME:
+            self._do_renew_name(info, aid, mtp, rate, carrier)
+        elif op == OP_TRANSFER_NAME:
+            self._do_transfer_name(info, aid, height)
+        elif op == OP_RELEASE_NAME:
+            self._do_release_name(info, aid, height)
         elif op == OP_SELL:
             self._do_sell(info, aid, atype, mtp)
         elif op == OP_RESERVE:
@@ -314,6 +320,50 @@ class State:
             return                       # no-op -> no bump
         for n in released:
             del self.names[n]
+        self._bump(owner, height)
+
+    # ---------------- the by-name forms (§3.5) ----------------
+    def _find_mine(self, info, actor):
+        """info['name'] iff `actor` controls it: the owned set includes listed/
+        offered/reserved names (owner stays the seller until settle/pay).
+        Absent or not the actor's -> None (drop)."""
+        name = info["name"]
+        row = self.names.get(name)
+        if row is None or row.owner != actor:
+            return None
+        return name
+
+    def _do_renew_name(self, info, owner, mtp, rate, carrier):
+        name = self._find_mine(info, owner)
+        if name is None:
+            return
+        alloc = water_fill(carrier["value"], rate, mtp,
+                           [self.names[name].lease_expiry], [name])
+        if alloc is None:
+            return                       # T==0 fail-closed
+        for n, add in alloc.items():
+            self.names[n].lease_expiry += add * BILLING_UNIT
+        # renewal is not a set mutation: no bump (§3.5)
+
+    def _do_transfer_name(self, info, owner, height):
+        name = self._find_mine(info, owner)
+        if name is None:
+            return
+        row = self.names[name]
+        if row.st != ST_OWNED:
+            return                       # locked (listed/offered) -> no-op, no bump
+        row.owner = info["target"]
+        row.owner_type = 0               # target type unknown (not digested)
+        self._bump(owner, height)        # a move bumps BOTH parties (§3.5)
+        self._bump(info["target"], height)
+
+    def _do_release_name(self, info, owner, height):
+        name = self._find_mine(info, owner)
+        if name is None:
+            return
+        if self.names[name].st != ST_OWNED:
+            return                       # locked -> no-op, no bump
+        del self.names[name]
         self._bump(owner, height)
 
     # ---------------- sell (§3.7) ----------------

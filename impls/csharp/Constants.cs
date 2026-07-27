@@ -27,23 +27,36 @@ public static class K
     public const ulong RESERVE_PAY_BPS     = 50UL;            // 0.50%
     public const long  MAX_ANCHOR_AGE = 1024L;                // blocks
 
+    // §6 pinned carrier ceiling: a protocol constant, not an L1 rule (L1 never
+    // size-checks an OP_RETURN script — unspendable, never executed; only the
+    // ~1 MB tx bound applies). Pinned at what a MAX_SCRIPT_SIZE(10000) script
+    // would carry, so impl buffers stay fixed-size; relay gates forwarding only.
+    public const int L1_SCRIPT_MAX = 10000;
+    public const int CARRIER_MAX = L1_SCRIPT_MAX - 4;   // 9996 payload bytes
+    public const int BODY_MAX = CARRIER_MAX - 4;        // 9992 after FF 'P' 'N' op
+    public const int FLAGS_MAX = BODY_MAX - 5;          // 9987 RENEW/RELEASE bitmap bytes
+    public const int FLAGS_XFER_MAX = FLAGS_MAX - 20;   // 9967 TRANSFER bitmap bytes
+
     // Dogecoin consensus subsidy across the reachable window: flat 10_000 DOGE.
     public const ulong SUBSIDY_KOINU  = 10_000UL * KOINU_PER_DOGE; // = 1_000_000_000_000
 
-    // Opcodes (protocol-spec.md §2) — names-only, contiguous 0x01–0x0C; all gate at ACTIVATION_HEIGHT.
-    public const byte OP_COMMIT    = 0x01;
-    public const byte OP_CLAIM     = 0x02;
-    public const byte OP_RENEW     = 0x03;
-    public const byte OP_TRANSFER  = 0x04;
-    public const byte OP_SELL      = 0x05;
-    public const byte OP_RESERVE   = 0x06;
-    public const byte OP_SETTLE    = 0x07;
-    public const byte OP_RELEASE   = 0x08;
-    public const byte OP_SELL_TO   = 0x09;
-    public const byte OP_PAY       = 0x0A;
-    public const byte OP_AS        = 0x0B;
-    public const byte OP_TRADE     = 0x0C;
-    public const byte OP_MIN       = OP_COMMIT;
+    // Opcodes (protocol-spec.md §2) — contiguous 0x01–0x0F; all gate at ACTIVATION_HEIGHT.
+    public const byte OP_RENEW_NAME    = 0x01;
+    public const byte OP_TRANSFER_NAME = 0x02;
+    public const byte OP_COMMIT    = 0x03;
+    public const byte OP_CLAIM     = 0x04;
+    public const byte OP_RENEW     = 0x05;
+    public const byte OP_TRANSFER  = 0x06;
+    public const byte OP_SELL      = 0x07;
+    public const byte OP_RESERVE   = 0x08;
+    public const byte OP_SETTLE    = 0x09;
+    public const byte OP_RELEASE   = 0x0A;
+    public const byte OP_RELEASE_NAME = 0x0B;
+    public const byte OP_SELL_TO   = 0x0C;
+    public const byte OP_PAY       = 0x0D;
+    public const byte OP_AS        = 0x0E;
+    public const byte OP_TRADE     = 0x0F;
+    public const byte OP_MIN       = OP_RENEW_NAME;
     public const byte OP_MAX       = OP_TRADE;
 
     // Universal prefix: 0xFF 'P' 'N'

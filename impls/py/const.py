@@ -23,6 +23,16 @@ RESERVE_BURN_BPS = 50
 RESERVE_PAY_BPS = 50
 MAX_ANCHOR_AGE = 1024
 
+# §6 pinned carrier ceiling: a protocol constant, not an L1 rule (L1 never
+# size-checks an OP_RETURN script — unspendable, never executed; only the
+# ~1 MB tx bound applies). Pinned at what a MAX_SCRIPT_SIZE(10000) script
+# would carry, so impl buffers stay fixed-size; relay gates forwarding only.
+L1_SCRIPT_MAX = 10_000
+CARRIER_MAX = L1_SCRIPT_MAX - 4      # 9_996 payload bytes
+BODY_MAX = CARRIER_MAX - 4           # 9_992 after FF 'P' 'N' op
+FLAGS_MAX = BODY_MAX - 5             # 9_987 RENEW/RELEASE bitmap bytes
+FLAGS_XFER_MAX = FLAGS_MAX - 20      # 9_967 TRANSFER bitmap bytes
+
 # §3.4 / §5 generator-pinned: Dogecoin flat subsidy across reachable window.
 SUBSIDY = 10_000 * KOINU_PER_DOGE   # 1_000_000_000_000 koinu
 
@@ -30,19 +40,22 @@ SUBSIDY = 10_000 * KOINU_PER_DOGE   # 1_000_000_000_000 koinu
 MASK64 = (1 << 64) - 1
 MASK128 = (1 << 128) - 1
 
-# Opcodes (§2) — names-only; contiguous 0x01–0x0C; all gate at ACTIVATION_HEIGHT
-OP_COMMIT = 0x01
-OP_CLAIM = 0x02
-OP_RENEW = 0x03
-OP_TRANSFER = 0x04
-OP_SELL = 0x05
-OP_RESERVE = 0x06
-OP_SETTLE = 0x07
-OP_RELEASE = 0x08
-OP_SELL_TO = 0x09
-OP_PAY = 0x0A
-OP_AS = 0x0B
-OP_TRADE = 0x0C
+# Opcodes (§2) — contiguous 0x01–0x0F; all gate at ACTIVATION_HEIGHT
+OP_RENEW_NAME = 0x01
+OP_TRANSFER_NAME = 0x02
+OP_COMMIT = 0x03
+OP_CLAIM = 0x04
+OP_RENEW = 0x05
+OP_TRANSFER = 0x06
+OP_SELL = 0x07
+OP_RESERVE = 0x08
+OP_SETTLE = 0x09
+OP_RELEASE = 0x0A
+OP_RELEASE_NAME = 0x0B
+OP_SELL_TO = 0x0C
+OP_PAY = 0x0D
+OP_AS = 0x0E
+OP_TRADE = 0x0F
 
 PREFIX = bytes([0xFF, 0x50, 0x4E])   # 0xFF 'P' 'N'
 

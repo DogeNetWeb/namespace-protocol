@@ -101,6 +101,16 @@ public static class SelfTest
         Check("dec-renew-all", Decoder.Decode(B.RenewAll(), 0).Kind == DecodeKind.Action);
         Check("dec-renew-bl1-invalid", Decoder.Decode(B.Payload(K.OP_RENEW, new byte[1]), 0).Kind == DecodeKind.Ignore);
         Check("dec-renew-safe", Decoder.Decode(B.RenewAllSafe(0), 0).Kind == DecodeKind.Action);
+
+        // §6 pinned carrier ceiling: flags at the exact consensus caps decode;
+        // one byte past the ceiling is IGNORE (fail-closed).
+        var wide = B.Payload(K.OP_RENEW, new byte[5 + K.FLAGS_MAX]);
+        Check("dec-renew-at-carrier-max", wide.Length == K.CARRIER_MAX
+              && Decoder.Decode(wide, 0).Kind == DecodeKind.Action);
+        Check("dec-renew-past-ceiling", Decoder.Decode(B.Payload(K.OP_RENEW, new byte[5 + K.FLAGS_MAX + 1]), 0).Kind == DecodeKind.Ignore);
+        Check("dec-transfer-at-xfer-max", Decoder.Decode(B.Payload(K.OP_TRANSFER, new byte[25 + K.FLAGS_XFER_MAX]), 0).Kind == DecodeKind.Action);
+        Check("dec-transfer-past-ceiling", Decoder.Decode(B.Payload(K.OP_TRANSFER, new byte[25 + K.FLAGS_XFER_MAX + 1]), 0).Kind == DecodeKind.Ignore);
+        Check("dec-release-at-flags-max", Decoder.Decode(B.Payload(K.OP_RELEASE, new byte[5 + K.FLAGS_MAX]), 0).Kind == DecodeKind.Action);
     }
 
     // ---- water-fill units ----

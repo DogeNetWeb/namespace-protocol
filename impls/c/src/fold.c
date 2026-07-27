@@ -90,6 +90,9 @@ void sm_apply_tx(SmState *s, const SmTx *tx) {
         case SM_OP_CLAIM:    sm_op_claim(s, &cx, a);    break;
         case SM_OP_RENEW:    sm_op_renew(s, &cx, a);    break;
         case SM_OP_TRANSFER: sm_op_transfer(s, &cx, a); break;
+        case SM_OP_RENEW_NAME:    sm_op_renew_name(s, &cx, a);    break;
+        case SM_OP_TRANSFER_NAME: sm_op_transfer_name(s, &cx, a); break;
+        case SM_OP_RELEASE_NAME:  sm_op_release_name(s, &cx, a);  break;
         case SM_OP_SELL:     sm_op_sell(s, &cx, a);     break;
         case SM_OP_RESERVE:  sm_op_reserve(s, &cx, a);  break;
         case SM_OP_SETTLE:   sm_op_settle(s, &cx, a);   break;

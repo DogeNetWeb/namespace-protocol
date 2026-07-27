@@ -467,7 +467,7 @@ function fuzzPayload(r: SplitMix64): Bytes {
     const len = r.boundedN(81);
     const p = new Uint8Array(len);
     for (let i = 0; i < len; i++) p[i] = r.boundedN(256);
-    if (r.boundedN(3) === 0 && len >= 4) { p[0] = 0xff; p[1] = 0x50; p[2] = 0x4e; p[3] = 1 + r.boundedN(12); }
+    if (r.boundedN(3) === 0 && len >= 4) { p[0] = 0xff; p[1] = 0x50; p[2] = 0x4e; p[3] = 1 + r.boundedN(15); }
     return p;
   }
   // grammar-aware: build a prefixed action-shaped payload, then maybe corrupt
@@ -482,11 +482,13 @@ function fuzzPayload(r: SplitMix64): Bytes {
 }
 
 function grammarPayload(r: SplitMix64): Bytes {
-  const op = 1 + r.boundedN(12); // 0x01..0x0C
+  const op = 1 + r.boundedN(15); // 0x01..0x0F
   let bodyLen: number;
   switch (op) {
     case OP.COMMIT: bodyLen = 32; break;
     case OP.CLAIM: bodyLen = 33 + r.boundedN(20); break;
+    case OP.RENEW_NAME: case OP.RELEASE_NAME: bodyLen = 1 + r.boundedN(20); break;
+    case OP.TRANSFER_NAME: bodyLen = 21 + r.boundedN(31); break;
     case OP.RENEW: bodyLen = [0, 5, 6 + r.boundedN(71)][r.boundedN(3)]; break;
     case OP.TRANSFER: bodyLen = r.boundedN(2) === 0 ? 20 : 26 + r.boundedN(51); break;
     case OP.SELL: bodyLen = 13 + r.boundedN(20); break;

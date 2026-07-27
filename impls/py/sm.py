@@ -41,6 +41,18 @@ def e_claim(salt, name):
     return enc(OP_CLAIM, salt + name)
 
 
+def e_renew_name(name):
+    return enc(OP_RENEW_NAME, name)
+
+
+def e_transfer_name(target, name):
+    return enc(OP_TRANSFER_NAME, target + name)
+
+
+def e_release_name(name):
+    return enc(OP_RELEASE_NAME, name)
+
+
 def e_renew_all():
     return enc(OP_RENEW, b"")
 
@@ -842,6 +854,29 @@ def t_dotted_names():
     T.check(b"shib.p2p" not in s.names and len(s.names) == 1, "dotted claim drops")
 
 
+
+def t_l1_carrier_ceiling():
+    # §6 pinned carrier ceiling: flags at the exact consensus caps decode;
+    # one byte past the ceiling is IGNORE — fail-closed in both directions.
+    from wire import decode_payload, ACTION, IGNORE
+    from const import FLAGS_MAX, FLAGS_XFER_MAX, CARRIER_MAX
+    wide = e_renew_sel(7, bytes((i * 7 + 1) & 0xFF for i in range(FLAGS_MAX)))
+    T.check(len(wide) == CARRIER_MAX, "RENEW at cap is exactly CARRIER_MAX (9996) payload bytes")
+    k, info = decode_payload(wide, 0)
+    T.check(k == ACTION and len(info["flags"]) == FLAGS_MAX,
+            "RENEW-selective decodes with all 9987 flag bytes")
+    k, _ = decode_payload(wide + b"\x00", 0)
+    T.check(k == IGNORE, "one byte past the L1 ceiling -> ignore")
+    xfer = e_transfer_sel(b"\xbb" * 20, 7, b"\x01" * FLAGS_XFER_MAX)
+    k, info = decode_payload(xfer, 0)
+    T.check(k == ACTION and len(info["flags"]) == FLAGS_XFER_MAX,
+            "TRANSFER-selective decodes at FLAGS_XFER_MAX (9967)")
+    k, _ = decode_payload(e_transfer_sel(b"\xbb" * 20, 7, b"\x01" * (FLAGS_XFER_MAX + 1)), 0)
+    T.check(k == IGNORE, "TRANSFER flags past the cap -> ignore")
+    k, info = decode_payload(e_release(3, b"\xff" * FLAGS_MAX), 0)
+    T.check(k == ACTION and len(info["flags"]) == FLAGS_MAX, "RELEASE decodes at FLAGS_MAX")
+
+
 ALL_TESTS = [
     t_primitives, t_secp_kat, t_commit_claim_happy, t_naked_claim_dropped,
     t_same_block_commit_too_shallow, t_commitment_copy_attack,
@@ -855,7 +890,7 @@ ALL_TESTS = [
     t_trade_swap_and_antirug, t_trade_failclosed_edges, t_no_tx_count_cap,
     t_fee_oracle,
     t_mtp_median, t_digest_sensitivity, t_release_all_reclaim_same_block,
-    t_attrib_a7_offcurve_p2pkh, t_ecmh, t_dotted_names,
+    t_attrib_a7_offcurve_p2pkh, t_ecmh, t_dotted_names, t_l1_carrier_ceiling,
 ]
 
 
@@ -1306,11 +1341,15 @@ def run_reorg(seed, count):
 
 
 def _fuzz_grammar_payload(rng):
-    op = 1 + rng.bounded(12)                 # 0x01..0x0C
+    op = 1 + rng.bounded(15)                 # 0x01..0x0F
     if op == OP_COMMIT:
         body_len = 32
     elif op == OP_CLAIM:
         body_len = 33 + rng.bounded(20)
+    elif op in (OP_RENEW_NAME, OP_RELEASE_NAME):
+        body_len = 1 + rng.bounded(20)
+    elif op == OP_TRANSFER_NAME:
+        body_len = 21 + rng.bounded(31)
     elif op == OP_RENEW:
         body_len = [0, 5, 6 + rng.bounded(71)][rng.bounded(3)]
     elif op == OP_TRANSFER:
@@ -1347,7 +1386,7 @@ def _fuzz_payload(rng):
             p[0] = 0xFF
             p[1] = 0x50
             p[2] = 0x4E
-            p[3] = 1 + rng.bounded(12)
+            p[3] = 1 + rng.bounded(15)
         return bytes(p)
     payload = bytearray(_fuzz_grammar_payload(rng))
     pick = rng.bounded(6)

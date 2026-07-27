@@ -284,8 +284,9 @@ collections (whose order is not canonical). Pinned constants:
 N_IDS=16   NAME_POOL=400   BASE_TS=1_700_000_000   activation_height=0
 identity i: h160 = byte(i) ‖ 18 zero bytes ‖ byte(i);  type = P2SH if i%4==3 else P2PKH
 name_of(i): "n" + base36(i)            # digits 0-9a-z
-op weights [COMMIT,CLAIM,RENEW,TRANSFER,SELL,RESERVE,SETTLE,RELEASE,SELL_TO,PAY,TRADE]
-           = [14,13,5,5,8,7,7,3,6,5,4]
+op weights [COMMIT,CLAIM,RENEW,TRANSFER,SELL,RESERVE,SETTLE,RELEASE,SELL_TO,PAY,TRADE,
+            RENEW_NAME,TRANSFER_NAME,RELEASE_NAME]
+           = [14,13,5,5,8,7,7,3,6,5,4,4,3,2]
 rate = 28·(1+bounded(4)) ; ts step = 300+bounded(600) ; txs/block = 1+bounded(8)
 lease burn = (rate/28)·days        # so days are exact
 ```
@@ -311,9 +312,9 @@ CI-checked against the table below:
 
 | seed | count  | state_digest (first 16 hex) |
 |------|--------|------------------------------|
-| 1    | 100000 | `b808ad61b7818e17…` |
-| 42   | 100000 | `227f60905567f8df…` |
-| 1000 | 100000 | `6d34066cfdd5dd09…` |
+| 1    | 100000 | `c640599837be1ab0…` |
+| 42   | 100000 | `9dd51eab55597850…` |
+| 1000 | 100000 | `14a725b65746dcef…` |
 
 Run `./run-conformance.sh` for the full matrix across every present implementation.
 
@@ -371,7 +372,7 @@ over-funded burn still wins). **47** TRADE fail-closed edges (OOB index / one-pa
 38–48 with behavioral assertions in `selftest` (`test_scenario_races` / `test_scenario_races2`),
 not just the digest.
 
-**Frozen golden:** `combined = 301ce369bc9ac1974f6e66cb74988df5d184c409ebab30c5f42e5095cdc81338` (2026-07-09: added the divergence-fix vectors — `55_claim_release_reclaim_sameblock` + `55b_reclaim_by_other` pin same-block release→re-mint, §3.6; `56_self_transfer_bumps_mut` pins self-transfer as a mutation bump, §3.5; `57_oracle_zero_bytes` pins the `block_bytes==0` → divisor-1 oracle rule, §3.4; `58_lease_clamp_huge_burn` pins the near-2⁶⁴ burn lease clamp to MAX_LEASE). Prior: c6101c4c… (names-only re-pin 2026-07-08: VOTE/DECORATE/post vectors removed; `52_charset` + `52b_structural` pin `[a-z0-9-]`, 1..32, lead/trail hyphen + `--`-at-3–4 rejects; `54_no_txcap` is 17 COMMITs), 4c84238f…, 059ac934…, db714fa4…, d7809634….)
+**Frozen golden:** `combined = aca6749e79b7e6b582e1f5043693b7991fcc592f4df537461e09d6b9e451d347` (2026-07-26: added the by-name vectors — `59_renew_name` pins the anchor-free singleton renew + non-owner drop, §3.5; `60_transfer_name` pins the one-name gift with both-party mutation bump, §3.5/§3.6; `61_release_name` pins the one-name release-to-pool, §3.5/§3.6). Prior: 301ce369… (2026-07-09: divergence-fix vectors — `55_claim_release_reclaim_sameblock` + `55b_reclaim_by_other` pin same-block release→re-mint, §3.6; `56_self_transfer_bumps_mut` pins self-transfer as a mutation bump, §3.5; `57_oracle_zero_bytes` pins the `block_bytes==0` → divisor-1 oracle rule, §3.4; `58_lease_clamp_huge_burn` pins the near-2⁶⁴ burn lease clamp to MAX_LEASE), c6101c4c… (re-pin 2026-07-08: `52_charset` + `52b_structural` pin `[a-z0-9-]`, 1..32, lead/trail hyphen + `--`-at-3–4 rejects; `54_no_txcap` is 17 COMMITs), 4c84238f…, 059ac934…, db714fa4…, d7809634….)
 — since the 2026-07-02 re-pin this is a **full cross-language lock**: the numbered battery was
 ported from `impls/c` into all six other impls during the charset change (it had previously
 been C-only, with the promoted clean-rooms carrying port-private scenario/behav surfaces —
@@ -411,8 +412,8 @@ i128 Σ (burn_leg+pay_leg)      (reserved)
 ```
 
 **Frozen golden (seed 42, count 100000):**
-`property_digest = cd8b9351148e84d3df9bc60fdea9fc7f2fbac03d68682df30b8166a12cb2e4e9`
-(and `state_digest` equals §6's `227f6090…`).
+`property_digest = 0c16c1a324810078eed5e4ec46c878d54d760a9a834773cb8898d08ebec87b8a`
+(and `state_digest` equals §6's `9dd51eab…`).
 
 ---
 
@@ -427,16 +428,17 @@ divergence between languages surfaces as a `state_digest` mismatch. Output: `inp
 coverage (ignore / per-opcode-action).
 
 **`sm_decode_payload(payload, len, value) → ACTION | IGNORE` (pinned):**
-- ACTION iff `len ≥ 4` and `payload[0..3] == FF 53 50` and opcode `payload[3] ∈ 0x01..0x0C` decodes
+- ACTION iff `len ≥ 4` and `payload[0..3] == FF 53 50` and opcode `payload[3] ∈ 0x01..0x0F` decodes
   per the per-opcode field layout below; any field/length mismatch ⇒ **IGNORE**.
 - Everything else (no action prefix, unknown opcode, or any field/length mismatch) ⇒ **IGNORE**.
 
 **Per-opcode action decode** (body `b = payload[4:]`, `bl = len−4`, all ints LE):
 `COMMIT` bl==32 · `CLAIM` bl 33..64 (salt32+name1..32) ·
-`RENEW` bl∈{0(all),5(all-safe: anchor5)}∪[6,76](selective: anchor5+flags1..71) ·
-`TRANSFER` bl==20(all)∪[26,76](selective: 20+anchor5+flags1..51) ·
+`RENEW` bl∈{0(all),5(all-safe: anchor5)}∪[6,9992](selective: anchor5+flags1..9987) ·
+`TRANSFER` bl==20(all)∪[26,9992](selective: 20+anchor5+flags1..9967) ·
+`RENEW_NAME/RELEASE_NAME` bl 1..32 (name) · `TRANSFER_NAME` bl 21..52 (target20+name1..32) ·
 `SELL` bl 13..44 (price8+window4+name1..32) · `RESERVE/SETTLE/PAY` bl 1..32 (name) ·
-`RELEASE` bl 6..76 (anchor5+flags1..71) ·
+`RELEASE` bl 6..9992 (anchor5+flags1..9987) ·
 `SELL_TO` bl 29..60 (price8+buyer20+name1..32) · `AS` bl==1 (index) ·
 `TRADE` bl≥5 (idxA1+idxB1+`nameA,nameB`, **exactly one** `0x2C`, both names §3.1). Names
 validate per §3.1 (`[a-z0-9-]`, 1..32; re-pinned 2026-07-07; also reject a leading or trailing
@@ -449,15 +451,19 @@ Per block: `bnd(600)` ts-step → `bnd(4)` rate → `bnd(8)` txs. Per tx: `1+bnd
 each `bnd(16)` id + `bnd(8)!=0` SIGHASH_ALL; `1+bnd(4)` carriers, each = one **carrier-bytes**
 draw then **value** draw (`bnd(12)`: 0 / `2⁶⁴−bnd(1000)` / `1+bnd(1000)`); `bnd(4)` outputs,
 each `bnd(16)` id + `bnd(4)==3?P2SH:P2PKH` + value. **Carrier-bytes:** `bnd(10)<4` ⇒ dumb
-(`bnd(3)` prefix-flag, `bnd(81)` len, that-many `bnd(256)` bytes, `bnd(21)` opcode, then if
-flag==0 & len≥4 overwrite `FF 53 50 <op>`); else grammar (`1+bnd(12)` opcode → build a valid
+(`bnd(3)` prefix-flag, the tiered len draw (re-pin note below), that-many `bnd(256)` bytes, `bnd(21)` opcode, then if
+flag==0 & len≥4 overwrite `FF 53 50 <op>`); else grammar (`1+bnd(15)` opcode → build a valid
 action with pinned per-op field draws → encode → one of six `bnd(6)` twists: none/none/
-truncate/flip-byte/extend/charflip). `input_digest` streams `txindex,inputs,[raw_len‖raw‖
-value‖vout]*,outs`.
+truncate/flip-byte/extend/charflip). Re-pinned 2026-07-26 for the §6 carrier-ceiling widening
+(§6 of the spec): the dumb len draw is `bnd(8)==0 ? bnd(9997) : bnd(81)` (1-in-8 wide), the
+grammar flags draw is `bnd(32)`-tiered (`==0` ⇒ `1+bnd(cap)` full-range, `<4` ⇒ `1+bnd(200)`
+mid, else `1+bnd(3)` tiny; cap = 9987 renew/release · 9967 transfer), the extend twist caps at
+9996, and `raw_len` streams as **u32-LE** (raw carriers can exceed 255 bytes). `input_digest`
+streams `txindex,inputs,[raw_len‖raw‖value‖vout]*,outs`.
 
 **Frozen golden (seed 42, count 100000):**
-`input_digest = fa9c8a8561fd7fd6d3357e9726cd4775a90b2249a142bae35998c8487154d118`,
-`state_digest = 76c6267c091edf9c7bf23633f04cb7adc2ae1f0e2460e3f996d21bd0cc68198a`.
+`input_digest = 72a3edf5221526013778dc77ec83b1ba3b34873b29afdfddf13a0369545d57b7`,
+`state_digest = 487d2c2f1f10e9812c7239a5cc51b07e6490ee08d03ccb03039ad78f37f5e7c5`.
 
 **Boundary-cluster variant (`sm bfuzz`).** Identical to `fuzz` except a `boundary` flag
 snaps four numeric draws — `fz_value`, `fz_price`, the SELL `window`, and the per-block MTP
@@ -473,8 +479,8 @@ values as exact 64-bit integers, not floats — a `number`-path impl produces di
 here and diverges on `input_digest`). The SELL window is masked to 32 bits.
 `MTP_BND = {1,2,300,7200,18000,86400,604800,31536000,31536001}`.
 **Frozen golden (seed 42, count 100000):**
-`input_digest = 9f83707d3724280375c72bae7c087672ef6fc8d8c72524d4fbf223b551cf52a0`,
-`state_digest = 15ebb8332e9a01549f146f2103ffe4ec55f372fd89f60814840447089d1a95ff`.
+`input_digest = 24f1f89dd8383c4c31799a80a4d1676183b682667e31290c17d364d0a3dd8aad`,
+`state_digest = f42c33d1646e79fe6ff0d9bd22127426d50613a70bf52269bc36e7598f8b80a6`.
 
 ---
 
@@ -499,7 +505,7 @@ Output: `blocks= fork= checks= failures=` then `D_full=`, `S_fork=`, `D_alt=`, a
 matches `reorg_digest` across impls.
 
 **Frozen golden (seed 42, count 8000):**
-`reorg_digest = 05772e9a1d855b83308d82ae5a1638261f465ebc34aef5ce0ceb071f9bc5b1f7`.
+`reorg_digest = b62eb4fc1fdf1adb9c1854678d23b520b39009543858e7494e8f4f78c97608dc`.
 
 ---
 
@@ -513,7 +519,7 @@ twice), walks that divergent branch, then asserts **clear-rebuild to J reproduce
 and **replaying the canonical tail reproduces `D_full`**. `reorgfuzz_digest = SHA256(D_alt₀ ‖
 … ‖ D_alt₆₃ ‖ D_full)`; the runner asserts `failures == 0` and matches the digest.
 **Frozen golden (seed 42, count 8000):**
-`reorgfuzz_digest = f91d3e29251bb6a2d45d745d993fa9859cf45ba9765d799a956fcdc60b2a848b`.
+`reorgfuzz_digest = e884272c4bd548a33cf1e6d9d47e2b2a4bc78d69187b4fa2329eee2f40a2bdae`.
 
 **`sm meta <seed> <count>`** — the metamorphic property *an action the protocol IGNORES is
 provably inert*. After each block of the `random` chain it injects a fixed all-inert tx (a
@@ -522,7 +528,7 @@ and asserts the state digest is **byte-unchanged**. A decoder/fold bug that lets
 "should-be-inert" carrier mutate state lights up as `failures>0` (and a divergent digest).
 Output: `failures=` + `state_digest=`; runner asserts `failures == 0` and matches the digest.
 **Frozen golden (seed 42, count 20000):**
-`state_digest = 360636c50d337b34a3d3b4c8898d851995113e5e7798fe15de5f492888ced03f`.
+`state_digest = 34d1782a685ce007e727425db18e1e70fcbf1af143d90a4c84f503afc5689fb6`.
 
 (Both modes cap `count` at 20000 — they keep the realized chain in RAM, like §10.)
 

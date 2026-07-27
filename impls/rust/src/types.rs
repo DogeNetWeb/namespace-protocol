@@ -14,21 +14,34 @@ impl ScriptType {
     }
 }
 
-// §2 opcodes (names-only; contiguous 0x01–0x0C; all gate at ACTIVATION_HEIGHT).
-pub const OP_COMMIT: u8 = 0x01;
-pub const OP_CLAIM: u8 = 0x02;
-pub const OP_RENEW: u8 = 0x03;
-pub const OP_TRANSFER: u8 = 0x04;
-pub const OP_SELL: u8 = 0x05;
-pub const OP_RESERVE: u8 = 0x06;
-pub const OP_SETTLE: u8 = 0x07;
-pub const OP_RELEASE: u8 = 0x08;
-pub const OP_SELL_TO: u8 = 0x09;
-pub const OP_PAY: u8 = 0x0A;
-pub const OP_AS: u8 = 0x0B;
-pub const OP_TRADE: u8 = 0x0C;
+// §2 opcodes (contiguous 0x01–0x0F; all gate at ACTIVATION_HEIGHT).
+// §6 pinned carrier ceiling: a protocol constant, not an L1 rule (L1 never
+// size-checks an OP_RETURN script — unspendable, never executed; only the
+// ~1 MB tx bound applies). Pinned at what a MAX_SCRIPT_SIZE(10000) script
+// would carry, so impl buffers stay fixed-size; relay gates forwarding only.
+pub const L1_SCRIPT_MAX: usize = 10000;
+pub const CARRIER_MAX: usize = L1_SCRIPT_MAX - 4; // 9996 payload bytes
+pub const BODY_MAX: usize = CARRIER_MAX - 4; // 9992 after FF 'P' 'N' op
+pub const FLAGS_MAX: usize = BODY_MAX - 5; // 9987 RENEW/RELEASE bitmap bytes
+pub const FLAGS_XFER_MAX: usize = FLAGS_MAX - 20; // 9967 TRANSFER bitmap bytes
 
-pub const OP_MIN: u8 = OP_COMMIT;
+pub const OP_RENEW_NAME: u8 = 0x01;
+pub const OP_TRANSFER_NAME: u8 = 0x02;
+pub const OP_COMMIT: u8 = 0x03;
+pub const OP_CLAIM: u8 = 0x04;
+pub const OP_RENEW: u8 = 0x05;
+pub const OP_TRANSFER: u8 = 0x06;
+pub const OP_SELL: u8 = 0x07;
+pub const OP_RESERVE: u8 = 0x08;
+pub const OP_SETTLE: u8 = 0x09;
+pub const OP_RELEASE: u8 = 0x0A;
+pub const OP_RELEASE_NAME: u8 = 0x0B;
+pub const OP_SELL_TO: u8 = 0x0C;
+pub const OP_PAY: u8 = 0x0D;
+pub const OP_AS: u8 = 0x0E;
+pub const OP_TRADE: u8 = 0x0F;
+
+pub const OP_MIN: u8 = OP_RENEW_NAME;
 pub const OP_MAX: u8 = OP_TRADE;
 
 // Protocol constants (§0 table).

@@ -21,7 +21,7 @@ public static class Decoder
 {
     /// <summary>
     /// sm_decode_payload (SPEC-conformance §9). Names-only demux: prefix 0xFF 'P' 'N'
-    /// + opcode 0x01..0x0C with valid fields → ACTION; everything else (UTF-8 noise,
+    /// + opcode 0x01..0x0F with valid fields → ACTION; everything else (UTF-8 noise,
     /// overlay band, malformed) → IGNORE. <paramref name="value"/> is unused by the
     /// demux (kept for call-site uniformity).
     /// </summary>
@@ -49,17 +49,21 @@ public static class Decoder
             case K.OP_CLAIM:
                 return bl >= 33 && bl <= 64 && ValidName(b, 32, bl - 32);  // salt32 + name1..32
             case K.OP_RENEW:
-                return bl == 0 || bl == 5 || (bl >= 6 && bl <= 76);        // {0,5}∪[6,76]
+                return bl == 0 || bl == 5 || (bl >= 6 && bl <= K.BODY_MAX); // {0,5}∪[6,BODY_MAX]
             case K.OP_TRANSFER:
-                return bl == 20 || (bl >= 26 && bl <= 76);                 // 20 ∪ [26,76]
+                return bl == 20 || (bl >= 26 && bl <= K.BODY_MAX);         // 20 ∪ [26,BODY_MAX]
             case K.OP_SELL:
                 return bl >= 13 && bl <= 44 && ValidName(b, 12, bl - 12);  // price8+window4+name1..32
+            case K.OP_RENEW_NAME:
+            case K.OP_RELEASE_NAME:
             case K.OP_RESERVE:
             case K.OP_SETTLE:
             case K.OP_PAY:
                 return bl >= 1 && bl <= 32 && ValidName(b, 0, bl);         // name 1..32
+            case K.OP_TRANSFER_NAME:
+                return bl >= 21 && bl <= 52 && ValidName(b, 20, bl - 20);  // target20 + name1..32
             case K.OP_RELEASE:
-                return bl >= 6 && bl <= 76;                                // anchor5 + flags1..71
+                return bl >= 6 && bl <= K.BODY_MAX;                        // anchor5 + flags1..FLAGS_MAX
             case K.OP_SELL_TO:
                 return bl >= 29 && bl <= 60 && ValidName(b, 28, bl - 28);  // price8+buyer20+name1..32
             case K.OP_AS:
@@ -67,7 +71,7 @@ public static class Decoder
             case K.OP_TRADE:
                 return ValidateTrade(b);
             default:
-                return false; // opcode outside 0x01..0x0C
+                return false; // opcode outside 0x01..0x0F
         }
     }
 

@@ -6,6 +6,16 @@
 // prose left a quantity implicit it is flagged in SPEC-RATIONALE.md, not silently guessed.
 
 // ─── §0 protocol constants ───────────────────────────────────────────────────────────────────
+// §6 pinned carrier ceiling: a protocol constant, not an L1 rule (L1 never
+// size-checks an OP_RETURN script — unspendable, never executed; only the
+// ~1 MB tx bound applies). Pinned at what a MAX_SCRIPT_SIZE(10000) script
+// would carry, so impl buffers stay fixed-size; relay gates forwarding only.
+export const L1_SCRIPT_MAX = 10000;
+export const CARRIER_MAX = L1_SCRIPT_MAX - 4; // 9996 payload bytes
+export const BODY_MAX = CARRIER_MAX - 4; // 9992 after FF 'P' 'N' op
+export const FLAGS_MAX = BODY_MAX - 5; // 9987 RENEW/RELEASE bitmap bytes
+export const FLAGS_XFER_MAX = FLAGS_MAX - 20; // 9967 TRANSFER bitmap bytes
+
 export const DUST_FLOOR = 1n; // koinu — rate floor, min vote weight, RESERVE deposit-leg floor
 export const RATE_CAP = 100_000_000n; // 1 DOGE in koinu — rate ceiling (§3.4)
 export const REF_SIZE = 200n; // bytes — fee-per-byte → per-name rent (§3.4)
@@ -42,22 +52,25 @@ export const DEFAULT_ACTIVATION_HEIGHT = 0n; // §5: activation_height=0 for the
 // ─── Opcodes (§2 Action Registry — names-only; contiguous 0x01–0x0C) ──────────────────────────
 // All ops gate at ACTIVATION_HEIGHT. Overlay band is 0x38–0xFF (consensus-ignored).
 export const OP = {
-  COMMIT: 0x01,
-  CLAIM: 0x02,
-  RENEW: 0x03,
-  TRANSFER: 0x04,
-  SELL: 0x05,
-  RESERVE: 0x06,
-  SETTLE: 0x07,
-  RELEASE: 0x08,
-  SELL_TO: 0x09,
-  PAY: 0x0a,
-  AS: 0x0b,
-  TRADE: 0x0c,
+  RENEW_NAME: 0x01,
+  TRANSFER_NAME: 0x02,
+  COMMIT: 0x03,
+  CLAIM: 0x04,
+  RENEW: 0x05,
+  TRANSFER: 0x06,
+  SELL: 0x07,
+  RESERVE: 0x08,
+  SETTLE: 0x09,
+  RELEASE: 0x0a,
+  RELEASE_NAME: 0x0b,
+  SELL_TO: 0x0c,
+  PAY: 0x0d,
+  AS: 0x0e,
+  TRADE: 0x0f,
 } as const;
 
 export const OP_MIN = 0x01;
-export const OP_MAX = 0x0c;
+export const OP_MAX = 0x0f;
 
 // Universal prefix bytes (§1): 0xFF 'P' 'N' <opcode>.
 export const PREFIX0 = 0xff;

@@ -103,6 +103,9 @@ final class Fold {
                 case Const.CLAIM -> claim(a, actor, o.value, height, mtp, rate);
                 case Const.RENEW -> renew(a, actor, o.value, height, mtp, rate);
                 case Const.TRANSFER -> transfer(a, actor, height);
+                case Const.RENEW_NAME -> renewName(a, actor, o.value, mtp, rate);
+                case Const.TRANSFER_NAME -> transferName(a, actor, height);
+                case Const.RELEASE_NAME -> releaseName(a, actor, height);
                 case Const.SELL -> sell(a, actor, mtp);
                 case Const.RESERVE -> reserve(a, actor, o.value, mtp, pool);
                 case Const.SETTLE -> settle(a, actor, mtp, pool, height);
@@ -187,6 +190,40 @@ final class Fold {
         if (add == null) return;                                     // T==0 fail-closed
         for (int i = 0; i < targets.size(); i++)
             st.names.get(targets.get(i)).leaseExpiry = cur[i] + add[i] * Const.BILLING_UNIT;
+    }
+
+    // ---- the by-name forms (§3.5): singleton siblings of the bitmap ops ----
+    // A name string is its own position-independent address into the owned set —
+    // no anchor, no anchor guard. The name MUST be the actor's (the owner stays
+    // the seller while LISTED/OFFERED/RESERVED); else drop.
+    private State.NameRow findMine(Action a, Model.TxIn actor) {
+        State.NameRow r = st.names.get(State.nameKey(a.name));
+        if (r == null || !Arrays.equals(r.owner, actor.id)) return null;
+        return r;
+    }
+
+    private void renewName(Action a, Model.TxIn actor, BigInteger value, long mtp, BigInteger rate) {
+        State.NameRow r = findMine(a, actor);
+        if (r == null) return;                                       // absent / not mine -> drop
+        long[] cur = new long[]{ r.leaseExpiry };
+        long[] add = Lease.waterfill(cur, mtp, value, rate);
+        if (add == null) return;                                     // T==0 fail-closed
+        r.leaseExpiry = cur[0] + add[0] * Const.BILLING_UNIT;
+        // renewal is not a set mutation -> no bump (listed/offered still renewable)
+    }
+
+    private void transferName(Action a, Model.TxIn actor, long height) {
+        State.NameRow r = findMine(a, actor);
+        if (r == null || r.st != Const.OWNED) return;                // absent / not mine / locked -> no-op
+        r.owner = a.tTarget.clone(); r.ownerType = Const.P2PKH;      // lease conveys (cosmetic type)
+        st.bumpMut(actor.id, height); st.bumpMut(a.tTarget, height); // a move bumps BOTH parties
+    }
+
+    private void releaseName(Action a, Model.TxIn actor, long height) {
+        State.NameRow r = findMine(a, actor);
+        if (r == null || r.st != Const.OWNED) return;                // absent / not mine / locked -> no-op
+        st.names.remove(State.nameKey(a.name));                      // -> pool, immediately reclaimable
+        st.bumpMut(actor.id, height);
     }
 
     private void transfer(Action a, Model.TxIn actor, long height) {

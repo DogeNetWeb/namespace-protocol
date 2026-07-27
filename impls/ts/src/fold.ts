@@ -214,6 +214,12 @@ export class Fold {
         return this.doTransfer(act, actor);
       case OP.RELEASE:
         return this.doRelease(act, actor);
+      case OP.RENEW_NAME:
+        return this.doRenewName(act, actor, o);
+      case OP.TRANSFER_NAME:
+        return this.doTransferName(act, actor);
+      case OP.RELEASE_NAME:
+        return this.doReleaseName(act, actor);
       case OP.SELL:
         return this.doSell(act, actor);
       case OP.SELL_TO:
@@ -368,6 +374,41 @@ export class Fold {
       r.leaseExpiry += a * BILLING_UNIT;
     }
     // RENEW does NOT bump last_set_mutation_height (no set/ordering change, §3.5)
+  }
+
+  // ─── the by-name forms (§3.5): singleton siblings of the bitmap ops ─────────────────────────
+  // A name string is its own position-independent address into the owned set — no anchor, no
+  // anchor guard. The name MUST be the actor's (the owner stays the seller while
+  // LISTED/OFFERED/RESERVED); else drop.
+  private _findMine(name: Bytes, actorId: Bytes): NameRow | null {
+    const r = this.names.get(nk(name));
+    if (!r || !eqBytes(r.owner, actorId)) return null;
+    return r;
+  }
+
+  private doRenewName(act: Extract<Action, { op: typeof OP.RENEW_NAME }>, actor: { id: Bytes; type: number }, o: FoldCarrier): void {
+    const r = this._findMine(act.name, actor.id);
+    if (!r) return;
+    const T = this.leaseDaysTotal(o.value);
+    if (T < 1n) return; // fail-closed at T=0 (listed/offered names still renewable)
+    const adds = this.waterfill([r], T);
+    r.leaseExpiry += (adds.get(nk(r.name)) ?? 0n) * BILLING_UNIT;
+    // renewal is not a set mutation → no bump
+  }
+
+  private doTransferName(act: Extract<Action, { op: typeof OP.TRANSFER_NAME }>, actor: { id: Bytes; type: number }): void {
+    const r = this._findMine(act.name, actor.id);
+    if (!r || r.st !== ST.OWNED) return; // absent / not mine / locked → no-op, no bump
+    this._chown(nk(r.name), act.target.slice()); // lease conveys
+    this._bump(actor.id); // a move bumps BOTH parties (self-target included)
+    this._bump(act.target);
+  }
+
+  private doReleaseName(act: Extract<Action, { op: typeof OP.RELEASE_NAME }>, actor: { id: Bytes; type: number }): void {
+    const r = this._findMine(act.name, actor.id);
+    if (!r || r.st !== ST.OWNED) return; // absent / not mine / locked → no-op, no bump
+    this._remove(nk(r.name)); // → pool, immediately reclaimable
+    this._bump(actor.id);
   }
 
   // ─── TRANSFER (§3.5/§3.6) ────────────────────────────────────────────────────────────────────

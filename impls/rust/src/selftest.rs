@@ -353,6 +353,41 @@ fn decode_cases(t: &mut T) {
     // RENEW length 5..8 (bl 1..4) invalid
     let r7 = vec![0xFF, 0x50, 0x4E, OP_RENEW, 0x00, 0x00, 0x00]; // bl=3
     t.check("renew bl3 invalid", matches!(decode_payload(&r7, 0), Decoded::Ignore));
+
+    // §6 pinned carrier ceiling: flags at the exact consensus caps decode;
+    // one byte past the ceiling is IGNORE (fail-closed).
+    let mut wide = vec![0xFF, 0x50, 0x4E, OP_RENEW];
+    wide.extend_from_slice(&[7, 0, 0, 0, 0]); // anchor5
+    wide.extend((0..FLAGS_MAX).map(|i| (i * 7 + 1) as u8));
+    t.check("renew at cap is exactly CARRIER_MAX bytes", wide.len() == CARRIER_MAX);
+    t.check(
+        "renew-selective decodes with all 9987 flag bytes",
+        matches!(&decode_payload(&wide, 0),
+                 Decoded::Action(Action::Renew { mode: RenewMode::Selective { flags, .. } })
+                 if flags.len() == FLAGS_MAX),
+    );
+    wide.push(0x00);
+    t.check("one byte past the L1 ceiling ignore", matches!(decode_payload(&wide, 0), Decoded::Ignore));
+    let mut xfer = vec![0xFF, 0x50, 0x4E, OP_TRANSFER];
+    xfer.extend_from_slice(&[0xBB; 20]);
+    xfer.extend_from_slice(&[7, 0, 0, 0, 0]);
+    xfer.extend(std::iter::repeat(0x01).take(FLAGS_XFER_MAX));
+    t.check(
+        "transfer-selective decodes at FLAGS_XFER_MAX",
+        matches!(&decode_payload(&xfer, 0),
+                 Decoded::Action(Action::Transfer { sel: Some(BitmapSel { flags, .. }), .. })
+                 if flags.len() == FLAGS_XFER_MAX),
+    );
+    xfer.push(0x00);
+    t.check("transfer flags past the cap ignore", matches!(decode_payload(&xfer, 0), Decoded::Ignore));
+    let mut rel = vec![0xFF, 0x50, 0x4E, OP_RELEASE];
+    rel.extend_from_slice(&[3, 0, 0, 0, 0]);
+    rel.extend(std::iter::repeat(0xFF).take(FLAGS_MAX));
+    t.check(
+        "release decodes at FLAGS_MAX",
+        matches!(&decode_payload(&rel, 0),
+                 Decoded::Action(Action::Release { flags, .. }) if flags.len() == FLAGS_MAX),
+    );
     // TRADE two commas -> ignore
     let mut tr = vec![0xFF, 0x50, 0x4E, OP_TRADE, 0, 1];
     tr.extend_from_slice(b"a,b,c");

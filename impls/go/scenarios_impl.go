@@ -661,6 +661,29 @@ func testWireCodec() {
 	// malformed action (0xFF lead, bad opcode) → IGNORE.
 	c = decode([]byte{0xFF, 0x50, 0x4E, 0xFE, 0x00}, 5)
 	check(c.kind == IGNORE, "malformed action → IGNORE")
+
+	// §6 pinned carrier ceiling: flags at the exact consensus caps decode;
+	// one byte past the ceiling is IGNORE (fail-closed).
+	wideBody := make([]byte, 5+FLAGS_MAX) // anchor5 + flags at cap
+	for i := range wideBody {
+		wideBody[i] = byte(i*7 + 1)
+	}
+	wide := payload(OP_RENEW, wideBody...)
+	check(len(wide) == CARRIER_MAX, "RENEW at cap is exactly CARRIER_MAX (9996) payload bytes")
+	c = decode(wide, 0)
+	check(c.kind == ACTION && len(c.flags) == FLAGS_MAX,
+		"RENEW-selective decodes with all 9987 flag bytes")
+	c = decode(append(wide, 0x00), 0)
+	check(c.kind == IGNORE, "one byte past the L1 ceiling → IGNORE")
+	xferBody := make([]byte, 25+FLAGS_XFER_MAX) // target20 + anchor5 + flags at cap
+	c = decode(payload(OP_TRANSFER, xferBody...), 0)
+	check(c.kind == ACTION && len(c.flags) == FLAGS_XFER_MAX,
+		"TRANSFER-selective decodes at FLAGS_XFER_MAX (9967)")
+	c = decode(payload(OP_TRANSFER, append(xferBody, 0x00)...), 0)
+	check(c.kind == IGNORE, "TRANSFER flags past the cap → IGNORE")
+	relBody := make([]byte, 5+FLAGS_MAX)
+	c = decode(payload(OP_RELEASE, relBody...), 0)
+	check(c.kind == ACTION && len(c.flags) == FLAGS_MAX, "RELEASE decodes at FLAGS_MAX")
 }
 
 func runAttribSelftest() {

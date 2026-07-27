@@ -739,7 +739,7 @@ func fuzzPayload(p *splitMix64) []byte {
 			out[0] = 0xFF
 			out[1] = 0x50
 			out[2] = 0x4E
-			out[3] = byte(1 + bnd(p, 12)) // 0x01..0x0C
+			out[3] = byte(1 + bnd(p, 15)) // 0x01..0x0F
 		}
 		return out
 	}
@@ -761,13 +761,17 @@ func fuzzPayload(p *splitMix64) []byte {
 }
 
 func grammarPayload(p *splitMix64) []byte {
-	op := 1 + bnd(p, 12) // 0x01..0x0C
+	op := 1 + bnd(p, 15) // 0x01..0x0F
 	var bodyLen int
 	switch op {
 	case OP_COMMIT:
 		bodyLen = 32
 	case OP_CLAIM:
 		bodyLen = 33 + bnd(p, 20)
+	case OP_RENEW_NAME, OP_RELEASE_NAME:
+		bodyLen = 1 + bnd(p, 20)
+	case OP_TRANSFER_NAME:
+		bodyLen = 21 + bnd(p, 31)
 	case OP_RENEW:
 		bodyLen = []int{0, 5, 6 + bnd(p, 71)}[bnd(p, 3)]
 	case OP_TRANSFER:

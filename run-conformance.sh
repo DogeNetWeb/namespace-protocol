@@ -87,7 +87,7 @@ echo "── scenario vectors (54 named adversarial cases + combined) ──"
 # in the seven-impl reference tier (c · py · ts · java · rust · go · cs).
 # See SPEC-conformance.md §"Two conformance tiers" / §6 and SPEC-RATIONALE.md.
 # Re-pinned 2026-07-09 after the divergence-fix vectors 55/55b/56/57/58 (was c6101c4c…).
-GOLDEN_COMBINED=301ce369bc9ac1974f6e66cb74988df5d184c409ebab30c5f42e5095cdc81338
+GOLDEN_COMBINED=aca6749e79b7e6b582e1f5043693b7991fcc592f4df537461e09d6b9e451d347
 ref_scen=$("run_$REF" scenario 2>/dev/null)
 ref_comb=$(echo "$ref_scen" | awk '/^combined/{print $2}')
 checks=$((checks+1))

@@ -102,7 +102,7 @@ typedef struct {
     SmRng rng;
     int64_t ts_ring[16]; int64_t last_ts; int64_t height; uint64_t rate;
     SHA256_CTX ih;                          // input_digest (raw fuzz stream)
-    int64_t cov[18];                        // decode coverage: [0]=ignore [1]=post [2+op]=action(op 1..15 → 3..17)
+    int64_t cov[18];                        // decode coverage: [0]=ignore [1+op]=action(op 1..15 → 2..16)
     int boundary;                           // bfuzz: snap numeric fields to the §-constant boundary table
 } FzGen;
 
@@ -148,6 +148,16 @@ static void fz_fill(FzGen *g, uint8_t *p, int n) { for (int i = 0; i < n; i++) p
 
 // Build a plausible action for `op` with random-but-valid fields (so the encoder
 // succeeds); the grammar-aware twist below then perturbs the bytes. PINNED draws.
+
+// Flags-length draw: mostly tiny (1..3), ~1/8 past the old 80-byte carrier
+// boundary, ~1/32 anywhere in the full consensus range up to `cap` (§6).
+static uint16_t fz_flags_len(FzGen *g, int cap) {
+    uint64_t m = fbnd(g, 32);
+    if (m == 0) return (uint16_t)(1 + fbnd(g, (uint64_t)cap));
+    if (m < 4)  return (uint16_t)(1 + fbnd(g, 200));
+    return (uint16_t)(1 + fbnd(g, 3));
+}
+
 static void fz_build_action(FzGen *g, uint8_t op, SmAction *a) {
     memset(a, 0, sizeof *a); a->op = op;
     char nm[SM_NAME_MAX + 1]; uint8_t nl;
@@ -162,24 +172,28 @@ static void fz_build_action(FzGen *g, uint8_t op, SmAction *a) {
         if (m == 0) { a->has_anchor = 0; a->flags_len = 0; }
         else if (m == 1) { a->has_anchor = 1; a->anchor = fbnd(g, 1u << 20); a->flags_len = 0; }
         else { a->has_anchor = 1; a->anchor = fbnd(g, 1u << 20);
-               a->flags_len = (uint8_t)(1 + fbnd(g, 3)); fz_fill(g, a->flags, a->flags_len); }
+               a->flags_len = fz_flags_len(g, SM_FLAGS_MAX); fz_fill(g, a->flags, a->flags_len); }
         break; }
     case SM_OP_TRANSFER: {
         SmId t; fz_id((int)fbnd(g, FZ_NIDS), &t); memcpy(a->addr, t.h160, 20);
         if (fbnd(g, 2) == 0) { a->has_anchor = 0; }
         else { a->has_anchor = 1; a->anchor = fbnd(g, 1u << 20);
-               a->flags_len = (uint8_t)(1 + fbnd(g, 3)); fz_fill(g, a->flags, a->flags_len); }
+               a->flags_len = fz_flags_len(g, SM_FLAGS_XFER_MAX); fz_fill(g, a->flags, a->flags_len); }
         break; }
     case SM_OP_SELL:
         a->price = fz_price(g);
         if (g->boundary && fbnd(g, 2) == 0) a->window = (uint32_t)VAL_BND[fbnd(g, NVAL_BND)];   // boundary-snap (bfuzz)
         else a->window = (fbnd(g, 2) == 0) ? 0 : (uint32_t)(SM_RESERVE_WINDOW + fbnd(g, 100000));
         fz_name((int)fbnd(g, FZ_NAMEPOOL), nm, &nl); memcpy(a->name, nm, nl + 1); a->name_len = nl; break;
+    case SM_OP_RENEW_NAME: case SM_OP_RELEASE_NAME:
     case SM_OP_RESERVE: case SM_OP_SETTLE: case SM_OP_PAY:
         fz_name((int)fbnd(g, FZ_NAMEPOOL), nm, &nl); memcpy(a->name, nm, nl + 1); a->name_len = nl; break;
+    case SM_OP_TRANSFER_NAME: {
+        SmId t; fz_id((int)fbnd(g, FZ_NIDS), &t); memcpy(a->addr, t.h160, 20);
+        fz_name((int)fbnd(g, FZ_NAMEPOOL), nm, &nl); memcpy(a->name, nm, nl + 1); a->name_len = nl; break; }
     case SM_OP_RELEASE:
         a->has_anchor = 1; a->anchor = fbnd(g, 1u << 20);
-        a->flags_len = (uint8_t)(1 + fbnd(g, 3)); fz_fill(g, a->flags, a->flags_len); break;
+        a->flags_len = fz_flags_len(g, SM_FLAGS_MAX); fz_fill(g, a->flags, a->flags_len); break;
     case SM_OP_SELL_TO: {
         a->price = fz_price(g); SmId b; fz_id((int)fbnd(g, FZ_NIDS), &b); memcpy(a->addr, b.h160, 20);
         fz_name((int)fbnd(g, FZ_NAMEPOOL), nm, &nl); memcpy(a->name, nm, nl + 1); a->name_len = nl; break; }
@@ -196,19 +210,24 @@ static void fz_build_action(FzGen *g, uint8_t op, SmAction *a) {
 }
 
 // Produce one carrier's raw payload bytes (dumb-random or grammar-aware+twist).
-// Returns the length; *out holds ≤ 80 bytes. PINNED draw order.
-static int fz_carrier_bytes(FzGen *g, uint8_t out[84]) {
+// Returns the length; *out holds ≤ SM_CARRIER_MAX bytes. PINNED draw order.
+// FZ_CARS bounds the per-tx raw-copy arrays (the fuzz draws 1..4 carriers);
+// it is a harness constant, decoupled from the SM_INLINE_CARRIERS memory hint.
+#define FZ_CARS 8
+static int fz_carrier_bytes(FzGen *g, uint8_t out[SM_CARRIER_MAX]) {
     uint64_t mode = fbnd(g, 10);
     if (mode < 4) {                                                   // ── dumb random (40%) ──
         uint64_t pf = fbnd(g, 3);
-        int len = (int)fbnd(g, 81);                                   // 0..80
+        int len = (fbnd(g, 8) == 0)                                   // 1/8 wide: 0..SM_CARRIER_MAX
+                ? (int)fbnd(g, SM_CARRIER_MAX + 1)
+                : (int)fbnd(g, 81);                                   // else the dense 0..80 band
         for (int i = 0; i < len; i++) out[i] = fbyte(g);
         uint8_t pop = (uint8_t)fbnd(g, 21);                           // candidate opcode 0..20
         if (pf == 0 && len >= 4) { out[0]=0xFF; out[1]=0x50; out[2]=0x4E; out[3]=pop; }  // force action prefix
         return len;
     }
     // ── grammar-aware (60%): build → encode → perturb ──
-    uint8_t op = (uint8_t)(1 + fbnd(g, 12));                          // 0x01..0x0C
+    uint8_t op = (uint8_t)(1 + fbnd(g, 15));                          // 0x01..0x0F
     SmAction a; fz_build_action(g, op, &a);
     size_t enc = sm_encode_action(&a, out);
     if (enc == 0) { out[0] = 0xFF; return 1; }                        // unreachable (fields valid); degenerate → ignore
@@ -217,7 +236,7 @@ static int fz_carrier_bytes(FzGen *g, uint8_t out[84]) {
     case 0: case 1: break;                                            // leave valid
     case 2: len = (int)fbnd(g, (uint64_t)len + 1); break;            // truncate to 0..len
     case 3: if (len > 0) { int pos = (int)fbnd(g, (uint64_t)len); out[pos] = fbyte(g); } break; // flip a byte
-    case 4: { int add = (int)fbnd(g, 4); for (int k = 0; k < add; k++) { uint8_t bv = fbyte(g); if (len < 80) out[len++] = bv; } } break; // extend
+    case 4: { int add = (int)fbnd(g, 4); for (int k = 0; k < add; k++) { uint8_t bv = fbyte(g); if (len < SM_CARRIER_MAX) out[len++] = bv; } } break; // extend
     case 5: if (len > 0) { static const uint8_t T[4] = {0x2C, 0x2E, 0x41, 0xFF};   // comma/dot/upper/non-utf8
                            int pos = (int)fbnd(g, (uint64_t)len); out[pos] = T[fbnd(g, 4)]; } break;
     }
@@ -232,13 +251,13 @@ static uint64_t fz_value(FzGen *g) {
 }
 
 // Hash the raw fuzz tx (the bytes + injected fields) into input_digest. PINNED.
-static void fz_hash_tx(FzGen *g, const SmTx *t, const uint8_t raw[SM_INLINE_CARRIERS][84], const int rlen[SM_INLINE_CARRIERS]) {
+static void fz_hash_tx(FzGen *g, const SmTx *t, const uint8_t (*raw)[SM_CARRIER_MAX], const int *rlen) {
     SHA256_CTX *h = &g->ih;
     h32(h, t->txindex); h8(h, (uint8_t)t->n_inputs);
     for (int i = 0; i < t->n_inputs; i++) { sha256_update(h, t->inputs[i].h160, 20); h8(h, t->inputs[i].type); h8(h, t->in_sighash_all[i]); }
     h8(h, (uint8_t)t->n_carriers);
     for (int c = 0; c < t->n_carriers; c++) {
-        h8(h, (uint8_t)rlen[c]); sha256_update(h, raw[c], (unsigned)rlen[c]);
+        h32(h, (uint32_t)rlen[c]); sha256_update(h, raw[c], (unsigned)rlen[c]);
         h64(h, t->carriers[c].value); h32(h, t->carriers[c].vout);
     }
     h8(h, (uint8_t)t->n_outs);
@@ -255,7 +274,7 @@ static void fz_build_tx(FzGen *g, uint32_t j, SmTx *t) {
         t->in_sighash_all[i] = (fbnd(g, 8) != 0);                     // 7/8 sign SIGHASH_ALL
     }
 
-    uint8_t raw[SM_INLINE_CARRIERS][84]; int rlen[SM_INLINE_CARRIERS];
+    static uint8_t raw[FZ_CARS][SM_CARRIER_MAX]; int rlen[FZ_CARS];   // static: 80 KB, single-threaded fuzz
     int n_car = 1 + (int)fbnd(g, 4);                                  // 1..4
     for (int c = 0; c < n_car; c++) {
         rlen[c] = fz_carrier_bytes(g, raw[c]);
@@ -264,7 +283,7 @@ static void fz_build_tx(FzGen *g, uint32_t j, SmTx *t) {
         sm_decode_payload(raw[c], (size_t)rlen[c], val, cr);
         cr->value = val; cr->vout = (uint32_t)c;
         if (cr->kind == SM_CAR_IGNORE) g->cov[0]++;
-        else                           g->cov[1 + cr->act.op]++;       // op 1..12 → 2..13
+        else                           g->cov[1 + cr->act.op]++;       // op 1..15 → 2..16
     }
 
     int n_out = (int)fbnd(g, 4);                                      // 0..3
@@ -323,10 +342,10 @@ static int fuzz_cli(int argc, char **argv, int boundary, const char *name) {
     char ih[65], sh[65]; hexout(idig, 32, ih); hexout(sdig, 32, sh);
     printf("txs=%llu\ninput_digest=%s\nstate_digest=%s\n", (unsigned long long)n, ih, sh);
     if (cov) {
-        static const char *OPN[16] = { "?", "voteup","votedn","commit","claim","renew","transfer","sell",
-                                       "reserve","settle","release","decorate","sellto","pay","as","trade" };
-        printf("decode_cov: ignore=%lld post=%lld", (long long)c[0], (long long)c[1]);
-        for (int op = 1; op <= 15; op++) printf(" %s=%lld", OPN[op], (long long)c[2 + op]);
+        static const char *OPN[16] = { "?", "renewname","transfername","commit","claim","renew","transfer","sell",
+                                       "reserve","settle","release","releasename","sellto","pay","as","trade" };
+        printf("decode_cov: ignore=%lld", (long long)c[0]);
+        for (int op = 1; op <= 15; op++) printf(" %s=%lld", OPN[op], (long long)c[1 + op]);
         printf("\n");
     }
     return 0;
@@ -535,8 +554,8 @@ int sm_cmd_coverage(int argc, char **argv) {
     static const char *EVN[SM_EV_COUNT] = {
         "claim_mint","claim_displace","waterfill_cap","waterfill_forfeit","reserve_win","reserve_clamp",
         "settle_ok","pay_ok","trade_ok","lapse","release_name","as_drop","sell_ok","sellto_ok" };
-    static const char *OPN[13] = { "?","commit","claim","renew","transfer","sell",
-                                   "reserve","settle","release","sellto","pay","as","trade" };
+    static const char *OPN[16] = { "?","renewname","transfername","commit","claim","renew","transfer","sell",
+                                   "reserve","settle","release","releasename","sellto","pay","as","trade" };
     int missing = 0;
     uint8_t id[32], sd[32]; int64_t ev[SM_EV_COUNT];
     sm_generate(seed, count, 0, id, sd, ev, NULL, NULL);
@@ -546,7 +565,7 @@ int sm_cmd_coverage(int argc, char **argv) {
     uint8_t fi[32], fs[32]; int64_t cov[18];
     fz_run(seed, count, 0, fi, fs, cov);
     if (cov[0] == 0) { printf("UNCOVERED decode: ignore\n"); missing++; }
-    for (int op = 1; op <= 12; op++) if (cov[1 + op] == 0) { printf("UNCOVERED decode op: %s\n", OPN[op]); missing++; }
+    for (int op = 1; op <= 15; op++) if (cov[1 + op] == 0) { printf("UNCOVERED decode op: %s\n", OPN[op]); missing++; }
     printf("coverage: %d uncovered branch(es) at seed=%llu count=%llu\n",
            missing, (unsigned long long)seed, (unsigned long long)count);
     return missing ? 1 : 0;

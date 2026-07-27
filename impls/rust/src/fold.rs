@@ -251,6 +251,9 @@ impl State {
             }
             Action::Renew { mode } => self.do_renew(actor, &mode, h, mtp, value, blk.rate),
             Action::Transfer { target, sel } => self.do_transfer(actor, target, &sel, h),
+            Action::RenewName { name } => self.do_renew_name(actor, &name, mtp, value, blk.rate),
+            Action::TransferName { target, name } => self.do_transfer_name(actor, target, &name, h),
+            Action::ReleaseName { name } => self.do_release_name(actor, &name, h),
             Action::Sell { price, window, name } => {
                 self.do_sell(actor, actor_type, price, window, &name, mtp)
             }
@@ -371,6 +374,49 @@ impl State {
             }
         }
         // RENEW does NOT bump last_set_mutation_height (no membership/ordering change).
+    }
+
+    // ----- the by-name forms (§3.5): singleton siblings of the bitmap ops -----
+    // A name string is its own position-independent address into the owned set:
+    // no anchor, no anchor guard. The name MUST be the actor's (the owner stays
+    // the seller while listed/offered/reserved); else drop.
+
+    fn do_renew_name(&mut self, actor: Hash160, name: &[u8], mtp: i64, value: u64, rate: u64) {
+        match self.names.get(name) {
+            Some(r) if r.owner == actor => {}
+            _ => return, // absent / not mine → drop
+        }
+        let cur = vec![self.names.get(name).map(|r| r.lease_expiry).unwrap_or(mtp)];
+        let adds = match water_fill(value, rate, mtp, &cur) {
+            Some(a) => a,
+            None => return, // T==0 fail-closed
+        };
+        if let Some(r) = self.names.get_mut(name) {
+            r.lease_expiry += (adds[0] as i64) * (BILLING_UNIT as i64);
+        }
+        // renewal is not a set mutation → no bump.
+    }
+
+    fn do_transfer_name(&mut self, actor: Hash160, target: Hash160, name: &[u8], h: i64) {
+        match self.names.get(name) {
+            Some(r) if r.owner == actor && !r.locked() => {}
+            _ => return, // absent / not mine / locked → no-op, no bump
+        }
+        if let Some(r) = self.names.get_mut(name) {
+            r.owner = target;
+            r.otype = ScriptType::P2pkh; // owner_type cosmetic / not digested
+        }
+        self.bump_mut(actor, h); // a move bumps BOTH parties (self-target included)
+        self.bump_mut(target, h);
+    }
+
+    fn do_release_name(&mut self, actor: Hash160, name: &[u8], h: i64) {
+        match self.names.get(name) {
+            Some(r) if r.owner == actor && !r.locked() => {}
+            _ => return, // absent / not mine / locked → no-op, no bump
+        }
+        self.names.remove(name);
+        self.bump_mut(actor, h);
     }
 
     // ----- transfer -----

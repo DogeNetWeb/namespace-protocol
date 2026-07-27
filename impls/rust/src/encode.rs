@@ -48,6 +48,22 @@ pub fn encode_action(a: &Action) -> Vec<u8> {
             v.extend_from_slice(name);
             v
         }
+        Action::RenewName { name } => {
+            let mut v = hdr(OP_RENEW_NAME);
+            v.extend_from_slice(name);
+            v
+        }
+        Action::TransferName { target, name } => {
+            let mut v = hdr(OP_TRANSFER_NAME);
+            v.extend_from_slice(target);
+            v.extend_from_slice(name);
+            v
+        }
+        Action::ReleaseName { name } => {
+            let mut v = hdr(OP_RELEASE_NAME);
+            v.extend_from_slice(name);
+            v
+        }
         Action::Reserve { name } => {
             let mut v = hdr(OP_RESERVE);
             v.extend_from_slice(name);

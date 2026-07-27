@@ -155,6 +155,9 @@ public sealed class Fold
             case K.OP_RENEW:     Renew(body, value, actor, rate, height, mtp); break;
             case K.OP_TRANSFER:  Transfer(body, actor, height); break;
             case K.OP_RELEASE:   Release(body, actor, height); break;
+            case K.OP_RENEW_NAME:    RenewName(body, value, actor, rate, mtp); break;
+            case K.OP_TRANSFER_NAME: TransferName(body, actor, height); break;
+            case K.OP_RELEASE_NAME:  ReleaseName(body, actor, height); break;
             case K.OP_SELL:      Sell(body, actor, actorType, mtp); break;
             case K.OP_RESERVE:   Reserve(body, value, actor, tx, consumed, mtp); break;
             case K.OP_SETTLE:    Settle(body, actor, tx, consumed, height, mtp); break;
@@ -275,6 +278,45 @@ public sealed class Fold
         for (int i = 0; i < selected.Count; i++)
             selected[i].LeaseExpiry += add[i] * K.BILLING_UNIT;
         // RENEW is not a set/ordering mutation → no anchor bump.
+    }
+
+    // ---- the by-name forms (§3.5): singleton siblings of the bitmap ops ----
+    // A name string is its own position-independent address into the owned set —
+    // no anchor, no anchor guard. The name MUST be the actor's (the owner stays
+    // the seller while LISTED/OFFERED/RESERVED); else drop.
+    private NameRow? FindMine(byte[] name, byte[] actor)
+    {
+        if (!Names.TryGetValue(NameKey(name), out var r)) return null;
+        return ByteEq(r.Owner, actor) ? r : null;
+    }
+
+    private void RenewName(byte[] body, ulong burn, byte[] actor, ulong rate, long mtp)
+    {
+        var r = FindMine(body, actor);
+        if (r == null) return;                                   // absent / not mine → drop
+        UInt128 T = Lease.TotalNameDays(burn, rate);
+        if (T == UInt128.Zero) return;                           // fail-closed at T=0
+        long[] add = Lease.WaterFill(T, new[] { Lease.HeadroomDays(r.LeaseExpiry, mtp) });
+        r.LeaseExpiry += add[0] * K.BILLING_UNIT;
+        // renewal is not a set mutation → no bump (listed/offered still renewable)
+    }
+
+    private void TransferName(byte[] body, byte[] actor, long height)
+    {
+        byte[] target = body[..20];
+        var r = FindMine(body[20..], actor);
+        if (r == null || r.Locked) return;                       // absent / not mine / locked → no-op
+        r.Owner = (byte[])target.Clone();                        // lease conveys
+        Bump(actor, height);                                     // a move bumps BOTH parties
+        Bump(target, height);
+    }
+
+    private void ReleaseName(byte[] body, byte[] actor, long height)
+    {
+        var r = FindMine(body, actor);
+        if (r == null || r.Locked) return;                       // absent / not mine / locked → no-op
+        Names.Remove(NameKey(r.Name));                           // → pool, immediately reclaimable
+        Bump(actor, height);
     }
 
     // ---- TRANSFER ----

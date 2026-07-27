@@ -163,6 +163,15 @@ func (s *FoldState) dispatchAction(b FoldBlock, tx FoldTx, fc *FoldCarrier, acto
 	case OP_RELEASE:
 		s.applyRelease(b, c, actor)
 
+	case OP_RENEW_NAME:
+		s.applyRenewName(b, fc, actor)
+
+	case OP_TRANSFER_NAME:
+		s.applyTransferName(b, c, actor)
+
+	case OP_RELEASE_NAME:
+		s.applyReleaseName(b, c, actor)
+
 	case OP_SELL:
 		s.applySell(b, c, actor)
 
