@@ -17,7 +17,7 @@ static void     wr32(uint8_t *b, uint32_t v) { for (int i = 0; i < 4; i++) b[i] 
 static void     wr64(uint8_t *b, uint64_t v) { for (int i = 0; i < 8; i++) b[i] = (uint8_t)(v >> (8*i)); }
 static void     wr5 (uint8_t *b, uint64_t v) { for (int i = 0; i < 5; i++) b[i] = (uint8_t)(v >> (8*i)); }
 
-// ── action decode (the part after the 4-byte 0xFF 'P' 'N' opcode header) ─────
+// ── action decode (the part after the 4-byte 0xFF 'D' 'N' opcode header) ─────
 // b = payload+4, blen = len-4. Returns 1 with `a` filled (a->op set), else 0.
 static int decode_action(const uint8_t *b, size_t blen, uint8_t op, SmAction *a) {
     memset(a, 0, sizeof *a);
@@ -122,8 +122,8 @@ void sm_decode_payload(const uint8_t *payload, size_t len, uint64_t value, SmCar
     memset(&car->act, 0, sizeof car->act);
     car->kind = SM_CAR_IGNORE;
 
-    // §1 action recognition: prefix 0xFF 'P' 'N' + opcode 0x01..0x0F.
-    if (len >= 4 && payload[0] == 0xFF && payload[1] == 0x50 && payload[2] == 0x4E) {
+    // §1 action recognition: prefix 0xFF 'D' 'N' + opcode 0x01..0x0F.
+    if (len >= 4 && payload[0] == 0xFF && payload[1] == 0x44 && payload[2] == 0x4E) {
         uint8_t op = payload[3];
         if (op >= SM_OP_MIN && op <= SM_OP_MAX &&
             decode_action(payload + 4, len - 4, op, &car->act))
@@ -137,7 +137,7 @@ void sm_decode_payload(const uint8_t *payload, size_t len, uint64_t value, SmCar
 
 // ── canonical action encoder (inverse of decode_action; grammar-aware fuzz) ──
 size_t sm_encode_action(const SmAction *a, uint8_t out[SM_CARRIER_MAX]) {
-    out[0] = 0xFF; out[1] = 0x50; out[2] = 0x4E; out[3] = a->op;
+    out[0] = 0xFF; out[1] = 0x44; out[2] = 0x4E; out[3] = a->op;
     uint8_t *b = out + 4;
     switch (a->op) {
     case SM_OP_COMMIT:

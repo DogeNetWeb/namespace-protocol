@@ -95,10 +95,10 @@ final class Modes {
     // Mirrors C build_inert_tx: truncated CLAIM, unknown opcode, bare UTF-8, overlay-band.
     static Model.Tx inertTx() {
         byte[] id = new byte[20]; id[0] = (byte) 0xEE; id[19] = (byte) 0xEE;
-        byte[] badClaim = new byte[]{(byte) 0xFF, 0x50, 0x4E, (byte) Const.CLAIM, 0, 0, 0, 0}; // truncated → IGNORE
-        byte[] unknown  = new byte[]{(byte) 0xFF, 0x50, 0x4E, 0x20};                           // gap opcode → IGNORE
+        byte[] badClaim = new byte[]{(byte) 0xFF, 0x44, 0x4E, (byte) Const.CLAIM, 0, 0, 0, 0}; // truncated → IGNORE
+        byte[] unknown  = new byte[]{(byte) 0xFF, 0x44, 0x4E, 0x20};                           // gap opcode → IGNORE
         byte[] utf8     = "hello".getBytes(java.nio.charset.StandardCharsets.US_ASCII);         // bare noise → IGNORE
-        byte[] overlay  = new byte[]{(byte) 0xFF, 0x50, 0x4E, (byte) 0xD6, 0x00};              // overlay band → IGNORE
+        byte[] overlay  = new byte[]{(byte) 0xFF, 0x44, 0x4E, (byte) 0xD6, 0x00};              // overlay band → IGNORE
         Model.TxOut[] outs = {
             Model.TxOut.carrier(BigInteger.ZERO, badClaim),
             Model.TxOut.carrier(BigInteger.ZERO, unknown),
@@ -201,7 +201,7 @@ final class Modes {
             int len = rng.bnd(81);
             byte[] p = new byte[len];
             for (int i = 0; i < len; i++) p[i] = (byte) rng.bnd(256);
-            if (rng.bnd(3) == 0 && len >= 4) { p[0] = (byte) 0xFF; p[1] = 0x50; p[2] = 0x4E; p[3] = (byte) (1 + rng.bnd(12)); }
+            if (rng.bnd(3) == 0 && len >= 4) { p[0] = (byte) 0xFF; p[1] = 0x44; p[2] = 0x4E; p[3] = (byte) (1 + rng.bnd(12)); }
             return p;
         }
         // grammar-aware: build a prefixed action-shaped payload, then maybe corrupt
@@ -232,7 +232,7 @@ final class Modes {
             default -> rng.bnd(77);
         };
         byte[] p = new byte[4 + bodyLen];
-        p[0] = (byte) 0xFF; p[1] = 0x50; p[2] = 0x4E; p[3] = (byte) op;
+        p[0] = (byte) 0xFF; p[1] = 0x44; p[2] = 0x4E; p[3] = (byte) op;
         for (int i = 4; i < p.length; i++) p[i] = (byte) rng.bnd(256);
         return p;
     }

@@ -64,10 +64,10 @@ fn rd_h5_le(b: &[u8]) -> i64 {
 }
 
 /// Top-level demux. `value` is unused (kept for call-site uniformity); consensus
-/// recognizes only the 0xFF 'P' 'N' + opcode 0x01..0x0C name-action shape.
+/// recognizes only the 0xFF 'D' 'N' + opcode 0x01..0x0C name-action shape.
 pub fn decode_payload(payload: &[u8], _value: u64) -> Decoded {
-    // §1 action recognition: prefix 0xFF 'P' 'N' + opcode 0x01..0x0C.
-    if payload.len() >= 4 && payload[0] == 0xFF && payload[1] == 0x50 && payload[2] == 0x4E {
+    // §1 action recognition: prefix 0xFF 'D' 'N' + opcode 0x01..0x0C.
+    if payload.len() >= 4 && payload[0] == 0xFF && payload[1] == 0x44 && payload[2] == 0x4E {
         let op = payload[3];
         if op >= OP_MIN && op <= OP_MAX {
             if let Some(a) = decode_action(op, &payload[4..]) {

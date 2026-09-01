@@ -115,7 +115,7 @@ posts with no content heuristics.
 | Byte | Value | Meaning |
 |------|-------|---------|
 | 0 | `0xFF` | UTF-8 escape / action flag |
-| 1 | `0x50` | `'P'` |
+| 1 | `0x44` | `'D'` |
 | 2 | `0x4E` | `'N'` |
 | 3 | `[opcode]` | 1 byte, `0x01`–`0x0A` |
 
@@ -823,7 +823,7 @@ out-of-range coordinates. The identity hash is over the *exact* pubkey bytes, so
 **Step-by-step:**
 
 1. **Length guard + shape.** Payload **≥ 4 bytes** (else drop, never read past the end);
-   confirm `0xFF 'P' 'N'` + a recognized opcode; for burn-bearing ops the value field meets
+   confirm `0xFF 'D' 'N'` + a recognized opcode; for burn-bearing ops the value field meets
    the op's requirement; bounds-check every field read against the exact length/format for
    that opcode (§2). Any out-of-bounds or mismatch → drop.
 2. **Classify `vin[0].scriptSig` (exact):** **P2PKH** iff exactly two pushes `[sig] [pubkey]`,
@@ -920,7 +920,7 @@ position). The scan extends the existing `valid_utf8()` demux:
 
 ```
 for each OP_RETURN output o in tx (vout order):       # vout order = intra-tx state-machine order
-    if o starts with 0xFF 'P' 'N' + opcode in 0x01..0x0A:   # contiguous; no reserved holes
+    if o starts with 0xFF 'D' 'N' + opcode in 0x01..0x0A:   # contiguous; no reserved holes
         run §4 stateless verification on vin[0]              # P2PKH O(1) or P2SH multisig O(m)
         if not verified: drop (spoof); continue
         if opcode in 0x03..0x0A and height < ACTIVATION_HEIGHT: drop; continue   # forward-only gate (§3.0)

@@ -12,7 +12,7 @@
 // would carry, so impl buffers stay fixed-size; relay gates forwarding only.
 export const L1_SCRIPT_MAX = 10000;
 export const CARRIER_MAX = L1_SCRIPT_MAX - 4; // 9996 payload bytes
-export const BODY_MAX = CARRIER_MAX - 4; // 9992 after FF 'P' 'N' op
+export const BODY_MAX = CARRIER_MAX - 4; // 9992 after FF 'D' 'N' op
 export const FLAGS_MAX = BODY_MAX - 5; // 9987 RENEW/RELEASE bitmap bytes
 export const FLAGS_XFER_MAX = FLAGS_MAX - 20; // 9967 TRANSFER bitmap bytes
 
@@ -72,9 +72,9 @@ export const OP = {
 export const OP_MIN = 0x01;
 export const OP_MAX = 0x0f;
 
-// Universal prefix bytes (§1): 0xFF 'P' 'N' <opcode>.
+// Universal prefix bytes (§1): 0xFF 'D' 'N' <opcode>.
 export const PREFIX0 = 0xff;
-export const PREFIX1 = 0x50; // 'P'
+export const PREFIX1 = 0x44; // 'D'
 export const PREFIX2 = 0x4e; // 'N'
 
 // names-table state enum (SPEC-conformance.md §4): OWNED=0 LISTED=1 OFFERED=2 RESERVED=3.

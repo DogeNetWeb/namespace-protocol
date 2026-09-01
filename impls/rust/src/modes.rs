@@ -181,11 +181,11 @@ fn apply_one_inert_tx(st: &mut State, blk: &Block, m: i64) {
     // naked CLAIM (no live commit) -> drops
     let naked = encode_action(&Action::Claim { salt: [0u8; 32], name: b"inert".to_vec() });
     // malformed RENEW bl=3 -> IGNORE (1..4 invalid)
-    let malformed = vec![0xFFu8, 0x50, 0x4E, OP_RENEW, 0x01, 0x02, 0x03];
+    let malformed = vec![0xFFu8, 0x44, 0x4E, OP_RENEW, 0x01, 0x02, 0x03];
     // UTF-8 noise / bare text -> IGNORE (names-only demux)
     let noise = b"hi".to_vec();
     // unknown opcode (overlay band) -> IGNORE
-    let overlay = vec![0xFFu8, 0x50, 0x4E, 0xD6, 0x00];
+    let overlay = vec![0xFFu8, 0x44, 0x4E, 0xD6, 0x00];
     let tx = Tx {
         inputs: vec![Input { identity: Some(id), stype: ScriptType::P2pkh, sighash_all: true }],
         outputs: vec![
@@ -383,7 +383,7 @@ fn fuzz_payload(rng: &mut SplitMix64) -> Vec<u8> {
         }
         if rng.bounded(3) == 0 && len >= 4 {
             p[0] = 0xFF;
-            p[1] = 0x50;
+            p[1] = 0x44;
             p[2] = 0x4E;
             p[3] = (1 + rng.bounded(15)) as u8;
         }
@@ -435,7 +435,7 @@ fn grammar_payload(rng: &mut SplitMix64) -> Vec<u8> {
     };
     let mut p = vec![0u8; 4 + body_len];
     p[0] = 0xFF;
-    p[1] = 0x50;
+    p[1] = 0x44;
     p[2] = 0x4E;
     p[3] = op;
     for b in p[4..].iter_mut() {

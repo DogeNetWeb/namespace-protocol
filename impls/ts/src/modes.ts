@@ -357,10 +357,10 @@ export function meta(seed: bigint, count: number): number {
 function inertTx(): FoldTx {
   // Mirrors C build_inert_tx: truncated CLAIM, unknown opcode 0x20, bare UTF-8, overlay 0xD6.
   // All decode to IGNORE — none mutate the digested state.
-  const badClaim = B.rawCarrier(new Uint8Array([0xff, 0x50, 0x4e, OP.CLAIM, 0, 0, 0, 0]), 0n, 0);
-  const unk = B.rawCarrier(new Uint8Array([0xff, 0x50, 0x4e, 0x20]), 0n, 1);
+  const badClaim = B.rawCarrier(new Uint8Array([0xff, 0x44, 0x4e, OP.CLAIM, 0, 0, 0, 0]), 0n, 0);
+  const unk = B.rawCarrier(new Uint8Array([0xff, 0x44, 0x4e, 0x20]), 0n, 1);
   const utf8 = B.rawCarrier(new TextEncoder().encode("hello"), 1n, 2);
-  const overlay = B.rawCarrier(new Uint8Array([0xff, 0x50, 0x4e, 0xd6, 0x00]), 0n, 3);
+  const overlay = B.rawCarrier(new Uint8Array([0xff, 0x44, 0x4e, 0xd6, 0x00]), 0n, 3);
   return oneIn(0, badClaim, unk, utf8, overlay);
 }
 
@@ -467,7 +467,7 @@ function fuzzPayload(r: SplitMix64): Bytes {
     const len = r.boundedN(81);
     const p = new Uint8Array(len);
     for (let i = 0; i < len; i++) p[i] = r.boundedN(256);
-    if (r.boundedN(3) === 0 && len >= 4) { p[0] = 0xff; p[1] = 0x50; p[2] = 0x4e; p[3] = 1 + r.boundedN(15); }
+    if (r.boundedN(3) === 0 && len >= 4) { p[0] = 0xff; p[1] = 0x44; p[2] = 0x4e; p[3] = 1 + r.boundedN(15); }
     return p;
   }
   // grammar-aware: build a prefixed action-shaped payload, then maybe corrupt
@@ -500,7 +500,7 @@ function grammarPayload(r: SplitMix64): Bytes {
     default: bodyLen = r.boundedN(77); break;
   }
   const p = new Uint8Array(4 + bodyLen);
-  p[0] = 0xff; p[1] = 0x50; p[2] = 0x4e; p[3] = op;
+  p[0] = 0xff; p[1] = 0x44; p[2] = 0x4e; p[3] = op;
   for (let i = 4; i < p.length; i++) p[i] = r.boundedN(256);
   return p;
 }

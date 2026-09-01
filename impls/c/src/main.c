@@ -568,7 +568,7 @@ static void test_codec(void) {
     sm_decode_payload(hello, 5, 1, &c); CHECK(c.kind == SM_CAR_IGNORE, "demux bare UTF-8 → ignore");
     const uint8_t ff[1] = { 0xFF };
     sm_decode_payload(ff, 1, 1, &c);    CHECK(c.kind == SM_CAR_IGNORE, "demux lone 0xFF → ignore");
-    { uint8_t ov[5] = { 0xFF, 0x50, 0x4E, 0xD6, 0x00 };
+    { uint8_t ov[5] = { 0xFF, 0x44, 0x4E, 0xD6, 0x00 };
       sm_decode_payload(ov, 5, 0, &c);  CHECK(c.kind == SM_CAR_IGNORE, "demux overlay opcode → ignore"); }
 
     // fail-closed action parse: truncated / wrong-length / bad-name / bad-opcode → IGNORE.
@@ -577,21 +577,21 @@ static void test_codec(void) {
       sm_decode_payload(b, l, 0, &c);     CHECK(c.kind == SM_CAR_ACTION && c.act.op == SM_OP_CLAIM, "parse exact CLAIM → action"); }
     { static uint8_t b[SM_CARRIER_MAX]; a = mk_commit("bob", A, 0x11); size_t l = sm_encode_action(&a, b);
       sm_decode_payload(b, l - 1, 0, &c); CHECK(c.kind == SM_CAR_IGNORE, "parse short COMMIT → ignore"); }
-    { uint8_t b[5] = { 0xFF, 0x50, 0x4E, SM_OP_RESERVE, ',' };       // comma is not a name char
+    { uint8_t b[5] = { 0xFF, 0x44, 0x4E, SM_OP_RESERVE, ',' };       // comma is not a name char
       sm_decode_payload(b, 5, 0, &c);     CHECK(c.kind == SM_CAR_IGNORE, "parse RESERVE bad-name → ignore"); }
-    { uint8_t b[4] = { 0xFF, 0x50, 0x4E, 0x00 };
+    { uint8_t b[4] = { 0xFF, 0x44, 0x4E, 0x00 };
       sm_decode_payload(b, 4, 1, &c);     CHECK(c.kind == SM_CAR_IGNORE, "parse opcode 0x00 → ignore"); }
-    { uint8_t b[4] = { 0xFF, 0x50, 0x4E, 0x10 };
+    { uint8_t b[4] = { 0xFF, 0x44, 0x4E, 0x10 };
       sm_decode_payload(b, 4, 1, &c);     CHECK(c.kind == SM_CAR_IGNORE, "parse opcode 0x10 (>0x0F) → ignore"); }
-    { uint8_t b[9] = { 0xFF, 0x50, 0x4E, SM_OP_TRADE, 0, 1, 'a', 'b', 'c' };   // no comma
+    { uint8_t b[9] = { 0xFF, 0x44, 0x4E, SM_OP_TRADE, 0, 1, 'a', 'b', 'c' };   // no comma
       sm_decode_payload(b, 9, 0, &c);     CHECK(c.kind == SM_CAR_IGNORE, "parse TRADE no-comma → ignore"); }
-    { uint8_t b[10] = { 0xFF, 0x50, 0x4E, SM_OP_TRADE, 0, 1, 'a', ',', 'b', ',' }; // two commas → wait that's a,(b,)
+    { uint8_t b[10] = { 0xFF, 0x44, 0x4E, SM_OP_TRADE, 0, 1, 'a', ',', 'b', ',' }; // two commas → wait that's a,(b,)
       // construct a clean double-comma: a,,b
-      uint8_t d[10] = { 0xFF, 0x50, 0x4E, SM_OP_TRADE, 0, 1, 'a', ',', ',', 'b' };
+      uint8_t d[10] = { 0xFF, 0x44, 0x4E, SM_OP_TRADE, 0, 1, 'a', ',', ',', 'b' };
       sm_decode_payload(d, 10, 0, &c);    CHECK(c.kind == SM_CAR_IGNORE, "parse TRADE double-comma → ignore"); (void)b; }
-    { uint8_t b[5] = { 0xFF, 0x50, 0x4E, SM_OP_AS, 2 };
+    { uint8_t b[5] = { 0xFF, 0x44, 0x4E, SM_OP_AS, 2 };
       sm_decode_payload(b, 5, 0, &c);     CHECK(c.kind == SM_CAR_ACTION && c.act.op == SM_OP_AS && c.act.as_index == 2, "parse AS exact → action"); }
-    { uint8_t b[6] = { 0xFF, 0x50, 0x4E, SM_OP_AS, 2, 0 };
+    { uint8_t b[6] = { 0xFF, 0x44, 0x4E, SM_OP_AS, 2, 0 };
       sm_decode_payload(b, 6, 0, &c);     CHECK(c.kind == SM_CAR_IGNORE, "parse AS over-length → ignore"); }
 }
 

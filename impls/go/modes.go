@@ -547,10 +547,10 @@ func inertTx() FoldTx {
 	return FoldTx{
 		inputs: []Identity{genID(0)},
 		carriers: []FoldCarrier{
-			carrier(0, 0, []byte{0xFF, 0x50, 0x4E, OP_CLAIM, 0, 0, 0, 0}), // truncated CLAIM → IGNORE
-			carrier(1, 0, []byte{0xFF, 0x50, 0x4E, 0x20}),                 // gap opcode → IGNORE
+			carrier(0, 0, []byte{0xFF, 0x44, 0x4E, OP_CLAIM, 0, 0, 0, 0}), // truncated CLAIM → IGNORE
+			carrier(1, 0, []byte{0xFF, 0x44, 0x4E, 0x20}),                 // gap opcode → IGNORE
 			carrier(2, 1, []byte("hello")),                                 // bare UTF-8 → IGNORE
-			carrier(3, 0, []byte{0xFF, 0x50, 0x4E, 0xD6, 0x00}),           // overlay band → IGNORE
+			carrier(3, 0, []byte{0xFF, 0x44, 0x4E, 0xD6, 0x00}),           // overlay band → IGNORE
 		},
 	}
 }
@@ -737,8 +737,8 @@ func fuzzPayload(p *splitMix64) []byte {
 		}
 		if bnd(p, 3) == 0 && l >= 4 {
 			out[0] = 0xFF
-			out[1] = 0x50
-			out[2] = 0x4E
+			out[1] = 0x44
+			out[2] = 0x4E;
 			out[3] = byte(1 + bnd(p, 15)) // 0x01..0x0F
 		}
 		return out
@@ -797,7 +797,7 @@ func grammarPayload(p *splitMix64) []byte {
 	}
 	pl := make([]byte, 4+bodyLen)
 	pl[0] = 0xFF
-	pl[1] = 0x50
+	pl[1] = 0x44
 	pl[2] = 0x4E
 	pl[3] = byte(op)
 	for i := 4; i < len(pl); i++ {

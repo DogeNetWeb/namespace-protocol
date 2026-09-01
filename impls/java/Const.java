@@ -29,7 +29,7 @@ final class Const {
     // would carry, so impl buffers stay fixed-size; relay gates forwarding only.
     static final int L1_SCRIPT_MAX = 10000;
     static final int CARRIER_MAX = L1_SCRIPT_MAX - 4;   // 9996 payload bytes
-    static final int BODY_MAX = CARRIER_MAX - 4;        // 9992 after FF 'P' 'N' op
+    static final int BODY_MAX = CARRIER_MAX - 4;        // 9992 after FF 'D' 'N' op
     static final int FLAGS_MAX = BODY_MAX - 5;          // 9987 RENEW/RELEASE bitmap bytes
     static final int FLAGS_XFER_MAX = FLAGS_MAX - 20;   // 9967 TRANSFER bitmap bytes
     static final BigInteger BPS_DEN = BigInteger.valueOf(10000);
@@ -40,7 +40,7 @@ final class Const {
     static final BigInteger SELL_FLOOR = BigInteger.valueOf(3);
 
     // prefix
-    static final byte P0 = (byte) 0xFF, P1 = (byte) 0x50, P2 = (byte) 0x4E;
+    static final byte P0 = (byte) 0xFF, P1 = (byte) 0x44, P2 = (byte) 0x4E;
 
     // opcodes — contiguous 0x01–0x0F (RENEW_NAME..TRADE); all gate at ACTIVATION_HEIGHT.
     static final int RENEW_NAME=0x01, TRANSFER_NAME=0x02, COMMIT=0x03, CLAIM=0x04,

@@ -31,7 +31,7 @@ const (
 	// would carry, so impl buffers stay fixed-size; relay gates forwarding only.
 	L1_SCRIPT_MAX  = 10000
 	CARRIER_MAX    = L1_SCRIPT_MAX - 4 // 9996 payload bytes
-	BODY_MAX       = CARRIER_MAX - 4   // 9992 after FF 'P' 'N' op
+	BODY_MAX       = CARRIER_MAX - 4   // 9992 after FF 'D' 'N' op
 	FLAGS_MAX      = BODY_MAX - 5      // 9987 RENEW/RELEASE bitmap bytes
 	FLAGS_XFER_MAX = FLAGS_MAX - 20    // 9967 TRANSFER bitmap bytes
 

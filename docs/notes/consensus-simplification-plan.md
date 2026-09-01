@@ -46,13 +46,13 @@ anti-spam burns are gone from consensus; overlays define their own anti-spam.
 With no text posts, consensus recognizes exactly one shape:
 
 ```
-byte[0..2] == 0xFF 'P' 'N'  &&  byte[3] ∈ {name-action opcodes}   → name action
+byte[0..2] == 0xFF 'D' 'N'  &&  byte[3] ∈ {name-action opcodes}   → name action
 everything else (incl. any valid UTF-8, and the whole 0xD6–0xFF overlay band)  → ignore
 ```
 
 The whole-payload UTF-8 test, the "burn distinguishes an intentional post from ambient
 zero-value `OP_RETURN` noise" reasoning, and the noise/post ambiguity all disappear.
-Overlay carriers (`0xFF 'P' 'N' 0xD6…0xFF`) already fell through to *ignore* — unchanged.
+Overlay carriers (`0xFF 'D' 'N' 0xD6…0xFF`) already fell through to *ignore* — unchanged.
 
 ## Change 3 — renumber name-action opcodes contiguous (0x01–0x0C)
 
@@ -104,7 +104,7 @@ This finishes the job the `.`/`_` exclusion (2026-07-07) started.
 ## Overlay side (not consensus — tracked here for completeness)
 
 The removed features already have overlay homes; on-chain forms follow the DNS precedent
-(bare prefixed carrier `0xFF 'P' 'N' <op> ‖ …`, ≤80 B relay-settleable, else gossip
+(bare prefixed carrier `0xFF 'D' 'N' <op> ‖ …`, ≤80 B relay-settleable, else gossip
 off-chain). These are **social-overlay-spec** tasks (a separate layer, not this repo), not consensus:
 
 - **Votes/reactions** → `0xD6` LABEL band (reactions already ride as labels; a vote is a
@@ -164,6 +164,6 @@ work; C is downstream and can lag.
 
 Fully names-only. Bare UTF-8 text posts fall through to *ignore*; the entire UTF-8 demux
 branch (Change 2) and the `posts` projection are deleted. Posting on-chain still works as an
-overlay commit (`0xFF 'P' 'N' <overlay POST op>`, consensus-ignored, honored by the social
+overlay commit (`0xFF 'D' 'N' <overlay POST op>`, consensus-ignored, honored by the social
 overlay) — permanence comes from the block, not from a consensus projection. This is the
 cleanest trust root: consensus classifies **no content at all**.

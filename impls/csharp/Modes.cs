@@ -111,10 +111,10 @@ public static class Modes
     {
         // truncated CLAIM → IGNORE; unknown opcode 0x20 → IGNORE; bare UTF-8 → IGNORE;
         // overlay-band 0xD6 → IGNORE. None mutates digested state. (mirrors C build_inert_tx)
-        byte[] badClaim = new byte[] { 0xFF, 0x50, 0x4E, K.OP_CLAIM, 0, 0, 0, 0 };
-        byte[] unknown = new byte[] { 0xFF, 0x50, 0x4E, 0x20 };
+        byte[] badClaim = new byte[] { 0xFF, 0x44, 0x4E, K.OP_CLAIM, 0, 0, 0, 0 };
+        byte[] unknown = new byte[] { 0xFF, 0x44, 0x4E, 0x20 };
         byte[] hello = B.Name("hello");
-        byte[] overlay = new byte[] { 0xFF, 0x50, 0x4E, 0xD6, 0x00 };
+        byte[] overlay = new byte[] { 0xFF, 0x44, 0x4E, 0xD6, 0x00 };
         var outs = new List<Out>
         {
             Out.Carrier(badClaim, 0),
@@ -248,7 +248,7 @@ public static class Modes
             int len = rng.Bnd(81);
             byte[] p = new byte[len];
             for (int i = 0; i < len; i++) p[i] = (byte)rng.Bnd(256);
-            if (rng.Bnd(3) == 0 && len >= 4) { p[0] = 0xFF; p[1] = 0x50; p[2] = 0x4E; p[3] = (byte)(1 + rng.Bnd(15)); } // 0x01..0x0F
+            if (rng.Bnd(3) == 0 && len >= 4) { p[0] = 0xFF; p[1] = 0x44; p[2] = 0x4E; p[3] = (byte)(1 + rng.Bnd(15)); } // 0x01..0x0F
             return p;
         }
         // grammar-aware: build a prefixed action-shaped payload, then maybe corrupt.
@@ -283,7 +283,7 @@ public static class Modes
             _ => rng.Bnd(77),
         };
         byte[] p = new byte[4 + bodyLen];
-        p[0] = 0xFF; p[1] = 0x50; p[2] = 0x4E; p[3] = (byte)op;
+        p[0] = 0xFF; p[1] = 0x44; p[2] = 0x4E; p[3] = (byte)op;
         for (int i = 4; i < p.Length; i++) p[i] = (byte)rng.Bnd(256);
         return p;
     }

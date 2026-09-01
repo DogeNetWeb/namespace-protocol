@@ -83,8 +83,8 @@ func decode(payload []byte, value uint64) Carrier {
 	_ = value
 	ig := Carrier{kind: IGNORE}
 
-	// §1 action recognition: prefix 0xFF 'P' 'N' + opcode 0x01..0x0C.
-	if len(payload) >= 4 && payload[0] == 0xFF && payload[1] == 0x50 && payload[2] == 0x4E {
+	// §1 action recognition: prefix 0xFF 'D' 'N' + opcode 0x01..0x0C.
+	if len(payload) >= 4 && payload[0] == 0xFF && payload[1] == 0x44 && payload[2] == 0x4E {
 		return decodeAction(payload)
 	}
 	// everything else (UTF-8 noise, overlay, empty) → IGNORE

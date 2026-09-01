@@ -59,7 +59,7 @@ Opcode range 0x01..0x0F → 0x01..0x0C · Overlay band 0xD6–0xFF UNCHANGED · 
 - Pubkey prefixes `0x02`/`0x03` (compressed), `0x04` (uncompressed), `0x06`/`0x07` (hybrid);
   push-opcode lengths `0x21`/`0x47`/`0x48` (§4).
 - TRADE pair separator comma `0x2C`.
-- Framing bytes `0xFF`/`0x50`/`0x4E` ('PN' prefix).
+- Framing bytes `0xFF`/`0x44`/`0x4E` ('DN' prefix).
 Only renumber a hex byte that is unambiguously an ACTION OPCODE by semantic context.
 
 ---
@@ -84,7 +84,7 @@ later locators. `[NAME-RULES]`/`[POST]` mark sites backfilled from direct reads 
 - **§5 fold pseudocode — L1443** · `if opcode == TRADE (0x0F):` · RENUMBER 0x0F→0x0C (leave 0x2C comma note L1456).
 - **§5 fold pseudocode — L1439-1440** · `if opcode == AS (0x0E):` / `k = payload[4]; flush any pending DECORATE buffer` · RENUMBER AS 0x0E→0x0B and drop the flush clause.
 - **§5 fold pseudocode — L1438** · `if opcode in 0x03..0x0F and height < ACTIVATION_HEIGHT: drop` · REWRITE → `if height < ACTIVATION_HEIGHT: drop; continue` (all ops gate at one height).
-- **§5 fold pseudocode — L1437** · `elif payload starts with 0xFF 'P' 'N' + opcode in 0x01..0x0F:` · RENUMBER range 0x01..0x0F→0x01..0x0C.
+- **§5 fold pseudocode — L1437** · `elif payload starts with 0xFF 'D' 'N' + opcode in 0x01..0x0F:` · RENUMBER range 0x01..0x0F→0x01..0x0C.
 - **§5 fold pseudocode — L1430** · `The scan extends the existing valid_utf8() demux:` · REWRITE → drop valid_utf8(); "the fold scans each single-push OP_RETURN in vout order".
 - **§5 web-of-trust — L1360-1363** · `Votes are anonymous (WoT filters by address, and only while an indexer still keeps per-voter rows)` · REWRITE: votes now off-chain overlay; drop the per-voter-rows clause; fold votes into off-chain social signals w/ reactions.
 - **§5 identity display — L1368** · `ASCII confusables survive the charset rules` · REVIEW [NAME-RULES]: keep (ASCII 0/o,1/l,rn/m survive) but ensure it no longer implies xn--/leading-hyphen names are valid (Change 4 kills them).

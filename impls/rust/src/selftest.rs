@@ -333,30 +333,30 @@ fn decode_cases(t: &mut T) {
     t.check("utf8 noise ignore", matches!(decode_payload(b"hello world", 1), Decoded::Ignore));
     t.check("zero-value noise ignore", matches!(decode_payload(b"hello", 0), Decoded::Ignore));
     // 0xFF lead with unknown opcode
-    t.check("0xff lead ignore", matches!(decode_payload(&[0xFF, 0x50, 0x4E, 0xEE], 1), Decoded::Ignore));
+    t.check("0xff lead ignore", matches!(decode_payload(&[0xFF, 0x44, 0x4E, 0xEE], 1), Decoded::Ignore));
     // overlay band opcode
-    t.check("overlay band ignore", matches!(decode_payload(&[0xFF, 0x50, 0x4E, 0xD6, 0x00], 1), Decoded::Ignore));
+    t.check("overlay band ignore", matches!(decode_payload(&[0xFF, 0x44, 0x4E, 0xD6, 0x00], 1), Decoded::Ignore));
     // uppercase name in CLAIM -> ignore (reject, never fold)
-    let mut bad = vec![0xFF, 0x50, 0x4E, OP_CLAIM];
+    let mut bad = vec![0xFF, 0x44, 0x4E, OP_CLAIM];
     bad.extend_from_slice(&[0u8; 32]);
     bad.extend_from_slice(b"Alice");
     t.check("uppercase name reject", matches!(decode_payload(&bad, 0), Decoded::Ignore));
     // structural name rejects
-    let mut lead = vec![0xFF, 0x50, 0x4E, OP_CLAIM];
+    let mut lead = vec![0xFF, 0x44, 0x4E, OP_CLAIM];
     lead.extend_from_slice(&[0u8; 32]);
     lead.extend_from_slice(b"-a");
     t.check("leading hyphen reject", matches!(decode_payload(&lead, 0), Decoded::Ignore));
-    let mut ace = vec![0xFF, 0x50, 0x4E, OP_CLAIM];
+    let mut ace = vec![0xFF, 0x44, 0x4E, OP_CLAIM];
     ace.extend_from_slice(&[0u8; 32]);
     ace.extend_from_slice(b"xn--x");
     t.check("ACE prefix reject", matches!(decode_payload(&ace, 0), Decoded::Ignore));
     // RENEW length 5..8 (bl 1..4) invalid
-    let r7 = vec![0xFF, 0x50, 0x4E, OP_RENEW, 0x00, 0x00, 0x00]; // bl=3
+    let r7 = vec![0xFF, 0x44, 0x4E, OP_RENEW, 0x00, 0x00, 0x00]; // bl=3
     t.check("renew bl3 invalid", matches!(decode_payload(&r7, 0), Decoded::Ignore));
 
     // §6 pinned carrier ceiling: flags at the exact consensus caps decode;
     // one byte past the ceiling is IGNORE (fail-closed).
-    let mut wide = vec![0xFF, 0x50, 0x4E, OP_RENEW];
+    let mut wide = vec![0xFF, 0x44, 0x4E, OP_RENEW];
     wide.extend_from_slice(&[7, 0, 0, 0, 0]); // anchor5
     wide.extend((0..FLAGS_MAX).map(|i| (i * 7 + 1) as u8));
     t.check("renew at cap is exactly CARRIER_MAX bytes", wide.len() == CARRIER_MAX);
@@ -368,7 +368,7 @@ fn decode_cases(t: &mut T) {
     );
     wide.push(0x00);
     t.check("one byte past the L1 ceiling ignore", matches!(decode_payload(&wide, 0), Decoded::Ignore));
-    let mut xfer = vec![0xFF, 0x50, 0x4E, OP_TRANSFER];
+    let mut xfer = vec![0xFF, 0x44, 0x4E, OP_TRANSFER];
     xfer.extend_from_slice(&[0xBB; 20]);
     xfer.extend_from_slice(&[7, 0, 0, 0, 0]);
     xfer.extend(std::iter::repeat(0x01).take(FLAGS_XFER_MAX));
@@ -380,7 +380,7 @@ fn decode_cases(t: &mut T) {
     );
     xfer.push(0x00);
     t.check("transfer flags past the cap ignore", matches!(decode_payload(&xfer, 0), Decoded::Ignore));
-    let mut rel = vec![0xFF, 0x50, 0x4E, OP_RELEASE];
+    let mut rel = vec![0xFF, 0x44, 0x4E, OP_RELEASE];
     rel.extend_from_slice(&[3, 0, 0, 0, 0]);
     rel.extend(std::iter::repeat(0xFF).take(FLAGS_MAX));
     t.check(
@@ -389,7 +389,7 @@ fn decode_cases(t: &mut T) {
                  Decoded::Action(Action::Release { flags, .. }) if flags.len() == FLAGS_MAX),
     );
     // TRADE two commas -> ignore
-    let mut tr = vec![0xFF, 0x50, 0x4E, OP_TRADE, 0, 1];
+    let mut tr = vec![0xFF, 0x44, 0x4E, OP_TRADE, 0, 1];
     tr.extend_from_slice(b"a,b,c");
     t.check("trade two commas", matches!(decode_payload(&tr, 0), Decoded::Ignore));
 }

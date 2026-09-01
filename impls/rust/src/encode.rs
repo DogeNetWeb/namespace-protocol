@@ -4,7 +4,7 @@ use crate::decode::*;
 use crate::types::*;
 
 fn hdr(op: u8) -> Vec<u8> {
-    vec![0xFF, 0x50, 0x4E, op]
+    vec![0xFF, 0x44, 0x4E, op]
 }
 
 pub fn encode_action(a: &Action) -> Vec<u8> {

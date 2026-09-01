@@ -142,7 +142,7 @@ final class Wire {
         }
         byte[] bb = body.toBytes();
         Buf out = new Buf();
-        out.u8(0xFF).u8(0x50).u8(0x4E).u8(a.op).bytes(bb);
+        out.u8(0xFF).u8(0x44).u8(0x4E).u8(a.op).bytes(bb);
         return out.toBytes();
     }
 

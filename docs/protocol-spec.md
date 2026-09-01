@@ -1,6 +1,6 @@
-# PepeNet Namespace — Action State Machine
+# DogeNet Namespace — Action State Machine
 
-This document defines the base layer of the PepeNet namespace: an identity +
+This document defines the base layer of the DogeNet namespace: an identity +
 naming/market layer carried in Dogecoin `OP_RETURN` actions.
 
 The protocol uses a **stateless indexing model**. Indexers verify identity and action
@@ -16,7 +16,7 @@ indexer resolves identically.
 
 ## 0. Foundations
 
-- A PepeNet action lives in `OP_RETURN` output(s) of a normal DOGE tx.
+- A DogeNet action lives in `OP_RETURN` output(s) of a normal DOGE tx.
 - An output is addressed by **`txid + vout`**. There is ~one `OP_RETURN` per tx today,
   but every reference uses `txid+vout` so it survives the move to multiple `OP_RETURN`s
   per tx (which several batching features in this spec are designed to exploit, §3.5).
@@ -123,7 +123,7 @@ carriers (the overlay band + any UTF-8), which fall through to *ignore*, with no
 | Byte | Value | Meaning |
 |------|-------|---------|
 | 0 | `0xFF` | UTF-8 escape / action flag |
-| 1 | `0x50` | `'P'` |
+| 1 | `0x44` | `'D'` |
 | 2 | `0x4E` | `'N'` |
 | 3 | `[opcode]` | 1 byte, `0x01`–`0x0F` |
 
@@ -143,7 +143,7 @@ outputs** in one tx, §3.5, never several pushes in one output.)
 
 ## 2. The Action Registry
 
-Fifteen opcodes, all live at `ACTIVATION_HEIGHT` = **1,130,000** (§3.0): the names +
+Fifteen opcodes, all live at `ACTIVATION_HEIGHT` = **6,359,500** (§3.0): the names +
 market layer (the directed-sale pair **`0x0C` SELL_TO / `0x0D` PAY**, §3.7) and the multi-identity
 pair **`0x0E` AS / `0x0F` TRADE** (custodial batching + atomic 1-1 name swap, §3.9), spanning
 `0x01`–`0x0F`. The set-mutating ops come in two forms — **by-name** (the payload names its one
@@ -171,7 +171,7 @@ state semantics. Wire formats are summarized here and specified per-op below.
 | `0x0F` | TRADE | `[idxA:1][idxB:1]` + `nameA,nameB` | — (fee-only; atomic 1-1 name swap, §3.9) |
 
 **Reserved — the overlay band `0x38`–`0xFF`.** The **last 200 opcodes are permanently reserved
-for overlay protocols** — layers that reuse the `0xFF 'P' 'N'` framing. This is a contract, not new
+for overlay protocols** — layers that reuse the `0xFF 'D' 'N'` framing. This is a contract, not new
 fold behavior: an `OP_RETURN` whose opcode byte falls outside `0x01`–`0x0F` already falls
 through to *ignore* (§5), and that must stay true **forever** for the band: any future
 *on-chain* opcode MUST be assigned in `0x10`–`0x37`, so an overlay carrier can never collide
@@ -183,12 +183,12 @@ with a chain action.
 
 ### 3.0 Activation & launch (fair launch)
 
-The live deployment (Pepecoin mainnet) pins two heights:
+The live deployment (Dogecoin mainnet, DogeNet) pins two heights:
 
 | pin | height | meaning |
 |-----|--------|---------|
-| `ACTIVATION_HEIGHT` | **1,130,000** | every opcode goes live here, atomically |
-| `ORACLE_START` | **1,119,000** | fold checkpoint — the pinned anchor header (`cda615cf…fad1bb`, PoW-validated); the first block an indexer ingests is `ORACLE_START + 1` |
+| `ACTIVATION_HEIGHT` | **6,359,500** | every opcode goes live here, atomically. Target wall-clock **2026-09-03 17:00 UTC** (noon US Central); Wednesday re-check from tip may snap to the nearest 500, keeping the 11,000 gap |
+| `ORACLE_START` | **6,348,500** | fold checkpoint — the pinned anchor header (`a6fe57ea…4766ac`, PoW-validated); the first block an indexer ingests is `ORACLE_START + 1` |
 
 Every opcode — COMMIT/CLAIM, the renew/gift/relinquish layer in both its by-name
 (RENEW_NAME/TRANSFER_NAME/RELEASE_NAME) and bitmap (RENEW/TRANSFER/RELEASE) forms, the open
@@ -201,7 +201,7 @@ are themselves gated, the first commits land at `ACTIVATION_HEIGHT` and the firs
 `ACTIVATION_HEIGHT + 1` — a built-in **blind commit phase** before any name is revealed.
 
 `ORACLE_START` sits **11,000 blocks below activation**, so the §3.4 fee oracle's
-`FEE_WINDOW` (10,081 blocks, fed from `ORACLE_START + 1`) is **full from block 1,129,082**
+`FEE_WINDOW` (10,081 blocks, fed from `ORACLE_START + 1`) is **full from block 6,358,582**
 — 918 blocks *before* the first live op. Every rate the fold ever computes for a live
 action is a full-window rate; there is no partial-window launch case, and every indexer
 shares the identical pinned window.
@@ -382,15 +382,15 @@ rate          = DUST_FLOOR                                                  if |
   computable from the block alone with **no UTXO set**. This is what keeps fee-awareness
   inside the stateless model.
 - **`subsidyᵢ` and `block_bytesᵢ` are pinned exactly** — both feed the rate, so an inexact reading
-  forks it. `subsidyᵢ` is **the host chain's own consensus block subsidy at height `i`** — PepeNet
+  forks it. `subsidyᵢ` is **the host chain's own consensus block subsidy at height `i`** — DogeNet
   holds no independent subsidy number, only this pointer to the host's, and each deployment pins the
   exact function in its **host-chain profile**. For both current hosts
   the entire reachable window sits in the **flat 10 000/block tail** — Dogecoin and Pepecoin (a
   Dogecoin fork with the same schedule shape) both switch to the flat reward at block 600 000, and a
   profile MUST pin `ACTIVATION_HEIGHT ≥ 600 000 + FEE_WINDOW` so no indexer ever replays the early
-  variable-subsidy era (the live pin, 1,130,000, sits deep in the tail). Because it is the *host's* value, a host **emission change** (e.g. a
+  variable-subsidy era (the live pin, 6,359,500, sits deep in the tail). Because it is the *host's* value, a host **emission change** (e.g. a
   block-speed re-scale that drops the per-block reward) is tracked by **following the host's
-  schedule, never a PepeNet fork**; a coordinated PepeNet-side cutover, if ever wanted, rides a
+  schedule, never a DogeNet fork**; a coordinated DogeNet-side cutover, if ever wanted, rides a
   §3.8 activation height. `block_bytesᵢ` is the serialized size of the block's **transaction data** — pinned exactly as
   **`Σ over the block's transactions of len(raw_tx)`**, the sum of each transaction's own serialized
   byte length (DOGE has no SegWit, so each `raw_tx` is its single unambiguous legacy serialization).
@@ -1211,7 +1211,7 @@ marker names**, not only `vin[0]`: each acting input must sign exactly `SIGHASH_
 position-and-output commitment that makes its attributed segment unforgeable.
 
 **Wallet note (normative).** Because `vin[0]` signs over the exact input array and outputs, a
-PepeNet action cannot be in-place fee-bumped (adding an input or trimming change invalidates the
+DogeNet action cannot be in-place fee-bumped (adding an input or trimming change invalidates the
 sig and silently moves `vin[0]`). To raise the fee: rebuild and re-sign, or CPFP via the change
 output. Wallets MUST NOT offer naive RBF on these txs.
 
@@ -1226,7 +1226,7 @@ one key are **different** identities. Non-canonical → drop. Implementations MU
 **Step-by-step:**
 
 1. **Length guard + shape.** Payload **≥ 4 bytes** (else drop, never read past the end); confirm
-   `0xFF 'P' 'N'` + a recognized opcode; for burn-bearing ops the value field meets the op's
+   `0xFF 'D' 'N'` + a recognized opcode; for burn-bearing ops the value field meets the op's
    requirement; bounds-check every field read against the exact length/format for that opcode
    (§2). Any out-of-bounds or mismatch → drop.
 2. **Classify `vin[0].scriptSig` (exact):** **P2PKH** iff exactly two pushes `[sig] [pubkey]`,
@@ -1298,8 +1298,8 @@ actor = vin[0]                                        # per-tx acting identity (
 for each OP_RETURN output o in tx (vout order):       # vout order = intra-tx state-machine order
     payload = the_single_minimal_push(o)              # exactly ONE minimal push, else ⊥ (§1)
     if payload is ⊥:                                        ignore   # multi-push / non-minimal / trailing opcode
-    elif payload starts with 0xFF 'P' 'N' + opcode in 0x01..0x0F:   # contiguous; no reserved holes (0x38..0xFF = overlay band, §2 — falls to ignore below, forever)
-        if height < ACTIVATION_HEIGHT: drop; continue   # forward-only (§3.0) — all ops live at 1,130,000
+    elif payload starts with 0xFF 'D' 'N' + opcode in 0x01..0x0F:   # contiguous; no reserved holes (0x38..0xFF = overlay band, §2 — falls to ignore below, forever)
+        if height < ACTIVATION_HEIGHT: drop; continue   # forward-only (§3.0) — all ops live at 6,359,500
         if opcode == AS (0x0E):                              # set acting identity (§3.9, Rule 1b)
             k = payload[4]
             actor = (k < n_inputs AND §4-verify(vin[k]) passes AND it signs SIGHASH_ALL) ? vin[k] : ⊥   # ⊥ ⇒ this segment's actions drop until a valid AS / tx-end
@@ -1431,7 +1431,7 @@ iff it passes **both** the §4 and these fold vectors.
 ## 6. Size budget (the pinned carrier ceiling)
 
 **The payload ceiling is a protocol consensus constant — chosen, not inherited from L1.**
-Pepecoin never size-limits a carrier: `IsUnspendable()` marks any script that begins with
+The host chain never size-limits a carrier: `IsUnspendable()` marks any script that begins with
 `OP_RETURN` unspendable regardless of size, and both `MAX_SCRIPT_SIZE` (10,000 B) and the
 520-byte `MAX_SCRIPT_ELEMENT_SIZE` are enforced at script *execution* — which an unspendable
 output never reaches. The only bound L1 actually imposes is the ~1 MB serialized-transaction
@@ -1442,7 +1442,7 @@ explicit, boundary-tested limits. A protocol carrier is one provably-unspendable
 ```
 scriptPubKey = OP_RETURN(1 B) ‖ OP_PUSHDATA2(1 B) ‖ len:2 B LE ‖ payload
 payload_max  = 10,000 − 1 − 1 − 2                = 9,996 bytes
-body_max     = payload_max − 4 (FF 'P' 'N' op)   = 9,992 bytes
+body_max     = payload_max − 4 (FF 'D' 'N' op)   = 9,992 bytes
 flags_max    = body_max − 5 (anchor)             = 9,987 bytes → 79,896 bitmap positions
 flags_max(TRANSFER) = body_max − 20 − 5          = 9,967 bytes → 79,736 bitmap positions
 ```

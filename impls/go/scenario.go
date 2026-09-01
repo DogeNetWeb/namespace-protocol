@@ -16,7 +16,7 @@ func idOf(n byte, styp byte) Identity {
 }
 
 func payload(op byte, body ...byte) []byte {
-	p := []byte{0xFF, 0x50, 0x4E, op}
+	p := []byte{0xFF, 0x44, 0x4E, op}
 	return append(p, body...)
 }
 
@@ -50,7 +50,7 @@ func carrier(vout uint32, value uint64, p []byte) FoldCarrier {
 
 // ---- C-reference scenario battery (impls/c `scenario`, byte-identical) ----
 // Builders mirroring the C reference's tx1/add_action/mk_* helpers: each op
-// body is framed FF 53 50 <op> and decoded through the real wire decoder.
+// body is framed FF 44 4E <op> and decoded through the real wire decoder.
 
 func mkTx(ins []Identity, cars []FoldCarrier, outs []FoldOutput) FoldTx {
 	return FoldTx{inputs: ins, carriers: cars, spend: outs}

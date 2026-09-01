@@ -36,10 +36,11 @@ All values verified against `dogecoin/dogecoin` `src/chainparams.cpp` + `src/dog
 | network magic | `C0 C0 C0 C0` |
 | P2P port | 22556 |
 | genesis | `1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691` |
-| sync-start checkpoint | genesis (height 0) — re-pin near the deployment's activation before launch |
+| sync-start checkpoint | **height 6,348,500 = `a6fe57eafbd1c2bca59dc3502fd52a26b52ddaa99361c9c5522ee8a8de4766ac`** — 11,000 below activation so the §3.4 oracle window is full from block 6,358,582; compact bits `0x196e146b`, time 1787776823. Re-derive with `scripts/fetchblk.py` before ship. |
 | AuxPoW | chain ID `0x0062`, from block 371 337 |
 | address versions | P2PKH 30 (`D…`), P2SH 22, WIF 158 |
-| `ACTIVATION_HEIGHT` | **not yet pinned** (Pepecoin deployment proves the network first) |
+| overlay seeds | `dogenet.shibpost.com:22556`, `seed.dogecoin.services:22556` |
+| `ACTIVATION_HEIGHT` | **6,359,500** — pinned for **2026-09-03 17:00 UTC** (noon US Central). Wednesday re-check from tip may snap to the nearest 500, keeping the 11,000 gap. Prefix `0xFF 'D' 'N'`. |
 
 Testnet (`testnet`): magic `FC C1 B7 DC`, port 44556, genesis `bb0a7826…50559e`.
 Regtest (`regtest`): magic `FA BF B5 DA`, port 18444, genesis `3d2160a3…e973a5`.

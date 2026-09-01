@@ -1,6 +1,6 @@
-# PepeNet namespace — Python reference SM
+# DogeNet namespace — Python reference SM
 
-An independent Python implementation of the PepeNet namespace state machine, built from the
+An independent Python implementation of the DogeNet namespace state machine, built from the
 specification (`docs/protocol-spec.md` + `protocol-sm/SPEC-conformance.md`). It is part of the
 cross-language conformance suite: each implementation is written independently and they
 cross-validate the spec's consensus-critical outcomes. `impls/c` is the normative reference; the

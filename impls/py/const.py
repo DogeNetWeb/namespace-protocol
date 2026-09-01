@@ -29,7 +29,7 @@ MAX_ANCHOR_AGE = 1024
 # would carry, so impl buffers stay fixed-size; relay gates forwarding only.
 L1_SCRIPT_MAX = 10_000
 CARRIER_MAX = L1_SCRIPT_MAX - 4      # 9_996 payload bytes
-BODY_MAX = CARRIER_MAX - 4           # 9_992 after FF 'P' 'N' op
+BODY_MAX = CARRIER_MAX - 4           # 9_992 after FF 'D' 'N' op
 FLAGS_MAX = BODY_MAX - 5             # 9_987 RENEW/RELEASE bitmap bytes
 FLAGS_XFER_MAX = FLAGS_MAX - 20      # 9_967 TRANSFER bitmap bytes
 
@@ -57,7 +57,7 @@ OP_PAY = 0x0D
 OP_AS = 0x0E
 OP_TRADE = 0x0F
 
-PREFIX = bytes([0xFF, 0x50, 0x4E])   # 0xFF 'P' 'N'
+PREFIX = bytes([0xFF, 0x44, 0x4E])   # 0xFF 'D' 'N'
 
 # names-row state enum (SPEC-conformance.md §4)
 ST_OWNED = 0

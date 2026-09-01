@@ -109,7 +109,7 @@ def decode_payload(payload, value):
 
 def _decode(payload, value):
     n = len(payload)
-    # ACTION prefix test: len>=4, payload[0:3]==FF 53 50, opcode 0x01..0x0F
+    # ACTION prefix test: len>=4, payload[0:3]==FF 44 4E, opcode 0x01..0x0F
     if n >= 4 and payload[0:3] == PREFIX:
         op = payload[3]
         if not (OP_RENEW_NAME <= op <= OP_TRADE):

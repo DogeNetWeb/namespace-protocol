@@ -21,7 +21,7 @@ impl ScriptType {
 // would carry, so impl buffers stay fixed-size; relay gates forwarding only.
 pub const L1_SCRIPT_MAX: usize = 10000;
 pub const CARRIER_MAX: usize = L1_SCRIPT_MAX - 4; // 9996 payload bytes
-pub const BODY_MAX: usize = CARRIER_MAX - 4; // 9992 after FF 'P' 'N' op
+pub const BODY_MAX: usize = CARRIER_MAX - 4; // 9992 after FF 'D' 'N' op
 pub const FLAGS_MAX: usize = BODY_MAX - 5; // 9987 RENEW/RELEASE bitmap bytes
 pub const FLAGS_XFER_MAX: usize = FLAGS_MAX - 20; // 9967 TRANSFER bitmap bytes
 

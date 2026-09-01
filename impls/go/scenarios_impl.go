@@ -637,7 +637,7 @@ func testWireCodec() {
 	// demux: bare UTF-8 / overlay / non-prefix → IGNORE; only name actions → ACTION.
 	c := decode([]byte("hello"), 1)
 	check(c.kind == IGNORE, "decode bare UTF-8 → IGNORE")
-	c = decode([]byte{0xFF, 0x50, 0x4E, 0xD6, 0x00}, 0)
+	c = decode([]byte{0xFF, 0x44, 0x4E, 0xD6, 0x00}, 0)
 	check(c.kind == IGNORE, "decode overlay opcode → IGNORE")
 	// COMMIT 32-byte body → ACTION.
 	cm := make([]byte, 32)
@@ -659,7 +659,7 @@ func testWireCodec() {
 	c = decode(payload(OP_CLAIM, body...), 0)
 	check(c.kind == IGNORE, "decode CLAIM ACE prefix → IGNORE")
 	// malformed action (0xFF lead, bad opcode) → IGNORE.
-	c = decode([]byte{0xFF, 0x50, 0x4E, 0xFE, 0x00}, 5)
+	c = decode([]byte{0xFF, 0x44, 0x4E, 0xFE, 0x00}, 5)
 	check(c.kind == IGNORE, "malformed action → IGNORE")
 
 	// §6 pinned carrier ceiling: flags at the exact consensus caps decode;

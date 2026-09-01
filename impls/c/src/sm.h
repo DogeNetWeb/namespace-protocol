@@ -79,7 +79,7 @@ enum { SM_P2PKH = 0, SM_P2SH = 1 };
 // gates what nodes FORWARD, never what the fold ACCEPTS once mined.
 #define SM_L1_SCRIPT_MAX  10000
 #define SM_CARRIER_MAX    (SM_L1_SCRIPT_MAX - 4)   // 9996: max payload bytes
-#define SM_BODY_MAX       (SM_CARRIER_MAX - 4)     // 9992: after FF 'P' 'N' op
+#define SM_BODY_MAX       (SM_CARRIER_MAX - 4)     // 9992: after FF 'D' 'N' op
 #define SM_FLAGS_MAX      (SM_BODY_MAX - 5)        // 9987: RENEW/RELEASE bitmap bytes
 #define SM_FLAGS_XFER_MAX (SM_FLAGS_MAX - 20)      // 9967: TRANSFER (target eats 20)
 
@@ -380,7 +380,7 @@ uint64_t sm_record_chain(uint64_t seed, uint64_t count,
 // on validity", §0) lives in, exercised by `sm fuzz`. Pinned in SPEC-conformance.md.
 
 // Decode one OP_RETURN payload (the bytes of the single minimal push, §1) into a
-// carrier: ACTION (prefix 0xFF 'P' 'N' + opcode 0x01..0x0F, fields parse per §2/§3)
+// carrier: ACTION (prefix 0xFF 'D' 'N' + opcode 0x01..0x0F, fields parse per §2/§3)
 // or IGNORE (everything else — unknown opcode, field/length mismatch, non-prefix).
 // `value` is unused by the demux (kept for call-site uniformity); the caller sets
 // car->value/car->vout. Fail-closed. `len` ≤ SM_CARRIER_MAX.

@@ -20,7 +20,7 @@ public readonly struct Decoded
 public static class Decoder
 {
     /// <summary>
-    /// sm_decode_payload (SPEC-conformance §9). Names-only demux: prefix 0xFF 'P' 'N'
+    /// sm_decode_payload (SPEC-conformance §9). Names-only demux: prefix 0xFF 'D' 'N'
     /// + opcode 0x01..0x0F with valid fields → ACTION; everything else (UTF-8 noise,
     /// overlay band, malformed) → IGNORE. <paramref name="value"/> is unused by the
     /// demux (kept for call-site uniformity).

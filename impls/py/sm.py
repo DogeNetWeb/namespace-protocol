@@ -1260,10 +1260,10 @@ def _inert_tx():
     malformed CLAIM, unknown opcode 0x20, bare UTF-8, overlay 0xD6.
     Applying it must leave state_digest unchanged."""
     outs = [
-        carrier(0, bytes([0xFF, 0x50, 0x4E, OP_CLAIM, 0, 0, 0, 0]), value=0),  # truncated CLAIM
-        carrier(1, bytes([0xFF, 0x50, 0x4E, 0x20]), value=0),                   # unknown opcode
+        carrier(0, bytes([0xFF, 0x44, 0x4E, OP_CLAIM, 0, 0, 0, 0]), value=0),  # truncated CLAIM
+        carrier(1, bytes([0xFF, 0x44, 0x4E, 0x20]), value=0),                   # unknown opcode
         carrier(2, b"hello", value=1),                                          # bare UTF-8 noise
-        carrier(3, bytes([0xFF, 0x50, 0x4E, 0xD6, 0x00]), value=0),             # overlay band
+        carrier(3, bytes([0xFF, 0x44, 0x4E, 0xD6, 0x00]), value=0),             # overlay band
     ]
     return tx(0, [vin_typed(0)], outs)
 
@@ -1370,7 +1370,7 @@ def _fuzz_grammar_payload(rng):
         body_len = rng.bounded(77)
     p = bytearray(4 + body_len)
     p[0] = 0xFF
-    p[1] = 0x50
+    p[1] = 0x44
     p[2] = 0x4E
     p[3] = op
     for i in range(4, len(p)):
@@ -1384,7 +1384,7 @@ def _fuzz_payload(rng):
         p = bytearray(rng.bounded(256) for _ in range(length))
         if rng.bounded(3) == 0 and length >= 4:
             p[0] = 0xFF
-            p[1] = 0x50
+            p[1] = 0x44
             p[2] = 0x4E
             p[3] = 1 + rng.bounded(15)
         return bytes(p)

@@ -1,6 +1,6 @@
 # namespace-protocol
 
-Cross-language reference implementations of the PepeNet namespace state machine
+Cross-language reference implementations of the DogeNet namespace state machine
 (the §5 fold of [`docs/protocol-spec.md`](docs/protocol-spec.md)), built for
 **headless conformance testing**: the same seed-driven action stream is
 regenerated and folded in every language, and they must all produce the

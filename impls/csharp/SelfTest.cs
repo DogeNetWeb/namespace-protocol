@@ -78,10 +78,10 @@ public static class SelfTest
         // zero-value bare → ignore
         Check("dec-bare-zero-ignore", Decoder.Decode(System.Text.Encoding.ASCII.GetBytes("hello"), 0).Kind == DecodeKind.Ignore);
         // overlay-band opcode → ignore
-        Check("dec-overlay-ignore", Decoder.Decode(new byte[] { 0xFF, 0x50, 0x4E, 0xD6, 0x00 }, 0).Kind == DecodeKind.Ignore);
+        Check("dec-overlay-ignore", Decoder.Decode(new byte[] { 0xFF, 0x44, 0x4E, 0xD6, 0x00 }, 0).Kind == DecodeKind.Ignore);
         // opcode 0x00 / 0x10 → ignore
-        Check("dec-op00-ignore", Decoder.Decode(new byte[] { 0xFF, 0x50, 0x4E, 0x00 }, 1).Kind == DecodeKind.Ignore);
-        Check("dec-op10-ignore", Decoder.Decode(new byte[] { 0xFF, 0x50, 0x4E, 0x10 }, 1).Kind == DecodeKind.Ignore);
+        Check("dec-op00-ignore", Decoder.Decode(new byte[] { 0xFF, 0x44, 0x4E, 0x00 }, 1).Kind == DecodeKind.Ignore);
+        Check("dec-op10-ignore", Decoder.Decode(new byte[] { 0xFF, 0x44, 0x4E, 0x10 }, 1).Kind == DecodeKind.Ignore);
         // valid COMMIT
         Check("dec-commit", Decoder.Decode(B.Commit(new byte[32]), 0).Kind == DecodeKind.Action);
         // short COMMIT → ignore

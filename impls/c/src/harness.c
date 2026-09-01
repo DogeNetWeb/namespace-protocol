@@ -223,7 +223,7 @@ static int fz_carrier_bytes(FzGen *g, uint8_t out[SM_CARRIER_MAX]) {
                 : (int)fbnd(g, 81);                                   // else the dense 0..80 band
         for (int i = 0; i < len; i++) out[i] = fbyte(g);
         uint8_t pop = (uint8_t)fbnd(g, 21);                           // candidate opcode 0..20
-        if (pf == 0 && len >= 4) { out[0]=0xFF; out[1]=0x50; out[2]=0x4E; out[3]=pop; }  // force action prefix
+        if (pf == 0 && len >= 4) { out[0]=0xFF; out[1]=0x44; out[2]=0x4E; out[3]=pop; }  // force action prefix
         return len;
     }
     // ── grammar-aware (60%): build → encode → perturb ──
@@ -500,18 +500,18 @@ static void build_inert_tx(SmTx *t) {
     SmId *in = sm_tx_input(t); in->h160[0] = 0xEE; in->h160[19] = 0xEE;
     in->type = SM_P2PKH; t->in_sighash_all[0] = 1;
     // 0: truncated CLAIM → IGNORE
-    uint8_t bad[8] = { 0xFF, 0x50, 0x4E, SM_OP_CLAIM, 0, 0, 0, 0 };
+    uint8_t bad[8] = { 0xFF, 0x44, 0x4E, SM_OP_CLAIM, 0, 0, 0, 0 };
     SmCarrier *c0 = sm_tx_carrier(t);
     sm_decode_payload(bad, 8, 0, c0); c0->value = 0; c0->vout = 0;
     // 1: unknown opcode in gap (0x20) → IGNORE
-    uint8_t unk[4] = { 0xFF, 0x50, 0x4E, 0x20 };
+    uint8_t unk[4] = { 0xFF, 0x44, 0x4E, 0x20 };
     SmCarrier *c1 = sm_tx_carrier(t);
     sm_decode_payload(unk, 4, 0, c1); c1->value = 0; c1->vout = 1;
     // 2: bare UTF-8 noise (no prefix) → IGNORE
     SmCarrier *c2 = sm_tx_carrier(t);
     sm_decode_payload((const uint8_t *)"hello", 5, 1, c2); c2->value = 1; c2->vout = 2;
     // 3: overlay-band opcode 0xD6 → IGNORE
-    uint8_t ov[5] = { 0xFF, 0x50, 0x4E, 0xD6, 0x00 };
+    uint8_t ov[5] = { 0xFF, 0x44, 0x4E, 0xD6, 0x00 };
     SmCarrier *c3 = sm_tx_carrier(t);
     sm_decode_payload(ov, 5, 0, c3); c3->value = 0; c3->vout = 3;
 }

@@ -428,7 +428,7 @@ divergence between languages surfaces as a `state_digest` mismatch. Output: `inp
 coverage (ignore / per-opcode-action).
 
 **`sm_decode_payload(payload, len, value) → ACTION | IGNORE` (pinned):**
-- ACTION iff `len ≥ 4` and `payload[0..3] == FF 53 50` and opcode `payload[3] ∈ 0x01..0x0F` decodes
+- ACTION iff `len ≥ 4` and `payload[0..2] == FF 44 4E` and opcode `payload[3] ∈ 0x01..0x0F` decodes
   per the per-opcode field layout below; any field/length mismatch ⇒ **IGNORE**.
 - Everything else (no action prefix, unknown opcode, or any field/length mismatch) ⇒ **IGNORE**.
 
@@ -452,7 +452,7 @@ each `bnd(16)` id + `bnd(8)!=0` SIGHASH_ALL; `1+bnd(4)` carriers, each = one **c
 draw then **value** draw (`bnd(12)`: 0 / `2⁶⁴−bnd(1000)` / `1+bnd(1000)`); `bnd(4)` outputs,
 each `bnd(16)` id + `bnd(4)==3?P2SH:P2PKH` + value. **Carrier-bytes:** `bnd(10)<4` ⇒ dumb
 (`bnd(3)` prefix-flag, the tiered len draw (re-pin note below), that-many `bnd(256)` bytes, `bnd(21)` opcode, then if
-flag==0 & len≥4 overwrite `FF 53 50 <op>`); else grammar (`1+bnd(15)` opcode → build a valid
+flag==0 & len≥4 overwrite `FF 44 4E <op>`); else grammar (`1+bnd(15)` opcode → build a valid
 action with pinned per-op field draws → encode → one of six `bnd(6)` twists: none/none/
 truncate/flip-byte/extend/charflip). Re-pinned 2026-07-26 for the §6 carrier-ceiling widening
 (§6 of the spec): the dumb len draw is `bnd(8)==0 ? bnd(9997) : bnd(81)` (1-in-8 wide), the
@@ -462,8 +462,9 @@ mid, else `1+bnd(3)` tiny; cap = 9987 renew/release · 9967 transfer), the exten
 streams `txindex,inputs,[raw_len‖raw‖value‖vout]*,outs`.
 
 **Frozen golden (seed 42, count 100000):**
-`input_digest = 72a3edf5221526013778dc77ec83b1ba3b34873b29afdfddf13a0369545d57b7`,
+`input_digest = 5366d497bc7b44590d2fbadcb04ee12852f78f16261b077afa7aa52ea74d63e0`,
 `state_digest = 487d2c2f1f10e9812c7239a5cc51b07e6490ee08d03ccb03039ad78f37f5e7c5`.
+(re-pinned 2026-09-01: prefix `0xFF 'D' 'N'`; `state_digest` unchanged because the fold is on decoded ops.)
 
 **Boundary-cluster variant (`sm bfuzz`).** Identical to `fuzz` except a `boundary` flag
 snaps four numeric draws — `fz_value`, `fz_price`, the SELL `window`, and the per-block MTP
@@ -479,8 +480,9 @@ values as exact 64-bit integers, not floats — a `number`-path impl produces di
 here and diverges on `input_digest`). The SELL window is masked to 32 bits.
 `MTP_BND = {1,2,300,7200,18000,86400,604800,31536000,31536001}`.
 **Frozen golden (seed 42, count 100000):**
-`input_digest = 24f1f89dd8383c4c31799a80a4d1676183b682667e31290c17d364d0a3dd8aad`,
+`input_digest = bfe1c1a768889295e3ee04e34768be555e8ea2dc0d43640b7f4728bc198dc550`,
 `state_digest = f42c33d1646e79fe6ff0d9bd22127426d50613a70bf52269bc36e7598f8b80a6`.
+(re-pinned 2026-09-01: prefix `0xFF 'D' 'N'`; `state_digest` unchanged.)
 
 ---
 

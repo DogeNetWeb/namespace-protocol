@@ -33,7 +33,7 @@ public static class K
     // would carry, so impl buffers stay fixed-size; relay gates forwarding only.
     public const int L1_SCRIPT_MAX = 10000;
     public const int CARRIER_MAX = L1_SCRIPT_MAX - 4;   // 9996 payload bytes
-    public const int BODY_MAX = CARRIER_MAX - 4;        // 9992 after FF 'P' 'N' op
+    public const int BODY_MAX = CARRIER_MAX - 4;        // 9992 after FF 'D' 'N' op
     public const int FLAGS_MAX = BODY_MAX - 5;          // 9987 RENEW/RELEASE bitmap bytes
     public const int FLAGS_XFER_MAX = FLAGS_MAX - 20;   // 9967 TRANSFER bitmap bytes
 
@@ -59,9 +59,9 @@ public static class K
     public const byte OP_MIN       = OP_RENEW_NAME;
     public const byte OP_MAX       = OP_TRADE;
 
-    // Universal prefix: 0xFF 'P' 'N'
+    // Universal prefix: 0xFF 'D' 'N'
     public const byte PFX0 = 0xFF;
-    public const byte PFX1 = 0x50; // 'P'
+    public const byte PFX1 = 0x44; // 'D'
     public const byte PFX2 = 0x4E; // 'N'
 
     // st enum byte values (SPEC-conformance §4).
