@@ -143,7 +143,7 @@ outputs** in one tx, §3.5, never several pushes in one output.)
 
 ## 2. The Action Registry
 
-Fifteen opcodes, all live at `ACTIVATION_HEIGHT` = **6,359,500** (§3.0): the names +
+Fifteen opcodes, all live at `ACTIVATION_HEIGHT` = **6,429,500** (§3.0): the names +
 market layer (the directed-sale pair **`0x0C` SELL_TO / `0x0D` PAY**, §3.7) and the multi-identity
 pair **`0x0E` AS / `0x0F` TRADE** (custodial batching + atomic 1-1 name swap, §3.9), spanning
 `0x01`–`0x0F`. The set-mutating ops come in two forms — **by-name** (the payload names its one
@@ -187,8 +187,8 @@ The live deployment (Dogecoin mainnet, DogeNet) pins two heights:
 
 | pin | height | meaning |
 |-----|--------|---------|
-| `ACTIVATION_HEIGHT` | **6,359,500** | every opcode goes live here, atomically. Target wall-clock **2026-09-03 17:00 UTC** (noon US Central); Wednesday re-check from tip may snap to the nearest 500, keeping the 11,000 gap |
-| `ORACLE_START` | **6,348,500** | fold checkpoint — the pinned anchor header (`a6fe57ea…4766ac`, PoW-validated); the first block an indexer ingests is `ORACLE_START + 1` |
+| `ACTIVATION_HEIGHT` | **6,429,500** | every opcode goes live here, atomically. Target wall-clock **2026-10-25 ~04:40 UTC** (re-pinned 2026-10-24 for live testing); keeps the 11,000 gap |
+| `ORACLE_START` | **6,418,500** | fold checkpoint — the pinned anchor header (`baebf7e7…df7ad1`, PoW-validated); the first block an indexer ingests is `ORACLE_START + 1` |
 
 Every opcode — COMMIT/CLAIM, the renew/gift/relinquish layer in both its by-name
 (RENEW_NAME/TRANSFER_NAME/RELEASE_NAME) and bitmap (RENEW/TRANSFER/RELEASE) forms, the open
@@ -201,7 +201,7 @@ are themselves gated, the first commits land at `ACTIVATION_HEIGHT` and the firs
 `ACTIVATION_HEIGHT + 1` — a built-in **blind commit phase** before any name is revealed.
 
 `ORACLE_START` sits **11,000 blocks below activation**, so the §3.4 fee oracle's
-`FEE_WINDOW` (10,081 blocks, fed from `ORACLE_START + 1`) is **full from block 6,358,582**
+`FEE_WINDOW` (10,081 blocks, fed from `ORACLE_START + 1`) is **full from block 6,428,582**
 — 918 blocks *before* the first live op. Every rate the fold ever computes for a live
 action is a full-window rate; there is no partial-window launch case, and every indexer
 shares the identical pinned window.
@@ -388,7 +388,7 @@ rate          = DUST_FLOOR                                                  if |
   the entire reachable window sits in the **flat 10 000/block tail** — Dogecoin and Pepecoin (a
   Dogecoin fork with the same schedule shape) both switch to the flat reward at block 600 000, and a
   profile MUST pin `ACTIVATION_HEIGHT ≥ 600 000 + FEE_WINDOW` so no indexer ever replays the early
-  variable-subsidy era (the live pin, 6,359,500, sits deep in the tail). Because it is the *host's* value, a host **emission change** (e.g. a
+  variable-subsidy era (the live pin, 6,429,500, sits deep in the tail). Because it is the *host's* value, a host **emission change** (e.g. a
   block-speed re-scale that drops the per-block reward) is tracked by **following the host's
   schedule, never a DogeNet fork**; a coordinated DogeNet-side cutover, if ever wanted, rides a
   §3.8 activation height. `block_bytesᵢ` is the serialized size of the block's **transaction data** — pinned exactly as
@@ -1299,7 +1299,7 @@ for each OP_RETURN output o in tx (vout order):       # vout order = intra-tx st
     payload = the_single_minimal_push(o)              # exactly ONE minimal push, else ⊥ (§1)
     if payload is ⊥:                                        ignore   # multi-push / non-minimal / trailing opcode
     elif payload starts with 0xFF 'D' 'N' + opcode in 0x01..0x0F:   # contiguous; no reserved holes (0x38..0xFF = overlay band, §2 — falls to ignore below, forever)
-        if height < ACTIVATION_HEIGHT: drop; continue   # forward-only (§3.0) — all ops live at 6,359,500
+        if height < ACTIVATION_HEIGHT: drop; continue   # forward-only (§3.0) — all ops live at 6,429,500
         if opcode == AS (0x0E):                              # set acting identity (§3.9, Rule 1b)
             k = payload[4]
             actor = (k < n_inputs AND §4-verify(vin[k]) passes AND it signs SIGHASH_ALL) ? vin[k] : ⊥   # ⊥ ⇒ this segment's actions drop until a valid AS / tx-end
